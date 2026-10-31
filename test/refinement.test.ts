@@ -54,6 +54,96 @@ test('One-field refinement cuts category and transfers points to contingency', (
   assert.ok(refined.summary.includes('contingency reserve'));
 });
 
+test('Refinement of one field leaves other fields identical', () => {
+  // Test 1: Moving itinerary time leaves budget, timeline, vendors, ideas, and other itinerary entries completely identical
+  const timeRefined = localRefinePlan(samplePlan, 'Move cake cutting to 9 pm', 100000);
+
+  // Untouched sections are strictly identical
+  assert.deepEqual(timeRefined.budget, samplePlan.budget, 'Budget lines must be completely identical');
+  assert.deepEqual(timeRefined.timeline, samplePlan.timeline, 'Timeline must be completely identical');
+  assert.deepEqual(timeRefined.vendors, samplePlan.vendors, 'Vendors must be completely identical');
+  assert.deepEqual(timeRefined.ideas, samplePlan.ideas, 'Ideas must be completely identical');
+
+  // Untouched itinerary items are completely identical
+  assert.equal(timeRefined.itinerary[0].time, samplePlan.itinerary[0].time);
+  assert.equal(timeRefined.itinerary[0].activity, samplePlan.itinerary[0].activity);
+  assert.equal(timeRefined.itinerary[1].time, samplePlan.itinerary[1].time);
+  assert.equal(timeRefined.itinerary[1].activity, samplePlan.itinerary[1].activity);
+
+  // Only the targeted activity changed
+  assert.equal(timeRefined.itinerary[2].time, '9 PM');
+
+  // Test 2: Budget cut leaves timeline, vendors, ideas, and itinerary completely identical
+  const budgetRefined = localRefinePlan(samplePlan, 'Cut decor by 5%', 100000);
+  assert.deepEqual(budgetRefined.timeline, samplePlan.timeline, 'Timeline must remain identical on budget cut');
+  assert.deepEqual(budgetRefined.vendors, samplePlan.vendors, 'Vendors must remain identical on budget cut');
+  assert.deepEqual(budgetRefined.ideas, samplePlan.ideas, 'Ideas must remain identical on budget cut');
+  assert.deepEqual(budgetRefined.itinerary, samplePlan.itinerary, 'Itinerary must remain identical on budget cut');
+});
+
+test('Discard leaves the plan unchanged', () => {
+  // Simulate active plan state
+  let activePlan: EventPlan = JSON.parse(JSON.stringify(samplePlan));
+  const originalPlan: EventPlan = JSON.parse(JSON.stringify(samplePlan));
+
+  // User requests a refinement: returns a proposed change, NOT an applied one
+  const proposalUpdatedPlan = localRefinePlan(activePlan, 'make the decor more traditional and cut Rs 5,000', 100000);
+  const diff = computePlanDiff(activePlan, proposalUpdatedPlan);
+
+  const proposal = {
+    id: 'prop_test',
+    title: 'Proposed Plan Revision',
+    explanation: 'make the decor more traditional and cut Rs 5,000',
+    impactSummary: proposalUpdatedPlan.summary,
+    diff,
+    updatedPlan: proposalUpdatedPlan,
+  };
+
+  // Verify proposal contains material changes
+  assert.ok(proposal.diff.length > 0, 'Proposal should contain diffs');
+  assert.notDeepEqual(proposal.updatedPlan, activePlan, 'Proposed plan should differ from current plan');
+
+  // User clicks Discard: proposal is dismissed without mutating activePlan
+  let pendingProposal: typeof proposal | null = proposal;
+  // Discard action:
+  pendingProposal = null;
+
+  // Active plan remains strictly untouched and identical to original
+  assert.deepEqual(activePlan, originalPlan, 'Discard must leave the active plan 100% unchanged');
+  assert.equal(pendingProposal, null, 'Proposal must be cleared');
+});
+
+test('Make the decor more traditional and cut Rs 5,000 produces proposal with diff and reasons', () => {
+  const refined = localRefinePlan(samplePlan, 'make the decor more traditional and cut Rs 5,000', 100000);
+  const diff = computePlanDiff(samplePlan, refined, 'make the decor more traditional and cut Rs 5,000');
+
+  // Rs 5,000 on a 1,00,000 budget is 5%
+  const decor = refined.budget.find((b) => b.item.toLowerCase().includes('decor'));
+  const cont = refined.budget.find((b) => b.item.toLowerCase().includes('contingency'));
+  assert.equal(decor?.pct, 10, 'Decor should be reduced from 15% to 10%');
+  assert.equal(cont?.pct, 12, 'Contingency should increase from 7% to 12%');
+
+  // Theme styling updated to traditional
+  assert.ok(refined.visualInspiration?.themeName.toLowerCase().includes('traditional'));
+
+  // Diff contains budget lines and theme changes with reasons
+  const decorDiff = diff.find((d) => d.item.toLowerCase().includes('decor'));
+  assert.ok(decorDiff?.reason);
+  assert.ok(decorDiff?.before.includes('15%'));
+  assert.ok(decorDiff?.after.includes('10%'));
+
+  const themeDiff = diff.find((d) => d.type === 'theme');
+  assert.ok(themeDiff);
+  assert.ok(themeDiff?.reason);
+
+  // Untouched fields remain identical
+  const catering = refined.budget.find((b) => b.item.toLowerCase().includes('cater'));
+  assert.equal(catering?.pct, samplePlan.budget.find((b) => b.item.toLowerCase().includes('cater'))?.pct);
+  assert.deepEqual(refined.timeline, samplePlan.timeline);
+  assert.deepEqual(refined.vendors, samplePlan.vendors);
+  assert.deepEqual(refined.ideas, samplePlan.ideas);
+});
+
 test('Proposed change before and after diff computation', () => {
   const refined = localRefinePlan(samplePlan, 'Cut decor by 5% and add shehnai player', 100000);
   const diff = computePlanDiff(samplePlan, refined);

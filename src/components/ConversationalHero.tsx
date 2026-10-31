@@ -17,6 +17,8 @@ interface ConversationalHeroProps {
   onOpenWorkspace: () => void;
   onSavePlan?: () => void;
   isSaved?: boolean;
+  onUndo?: () => void;
+  canUndo?: boolean;
 }
 
 const STARTER_PROMPTS = [
@@ -35,6 +37,8 @@ export const ConversationalHero: React.FC<ConversationalHeroProps> = ({
   onOpenWorkspace,
   onSavePlan,
   isSaved = false,
+  onUndo,
+  canUndo = false,
 }) => {
   const [messages, setMessages] = useState<DiscoveryMessage[]>([
     {
@@ -351,6 +355,16 @@ export const ConversationalHero: React.FC<ConversationalHeroProps> = ({
                   </span>
                 </button>
 
+                {canUndo && onUndo && (
+                  <button
+                    type="button"
+                    onClick={onUndo}
+                    className="px-3.5 py-2.5 text-xs font-semibold rounded-sm border border-[#DDD0BD] bg-white text-[#7A1F2B] hover:bg-[#FAF5ED] transition-colors"
+                  >
+                    Undo
+                  </button>
+                )}
+
                 {onSavePlan && (
                   <button
                     type="button"
@@ -580,15 +594,22 @@ export const ConversationalHero: React.FC<ConversationalHeroProps> = ({
                 </div>
                 <div className="divide-y divide-[#DDD0BD]">
                   {activeProposal.diff.map((item, idx) => (
-                    <div key={idx} className="p-2.5 text-xs grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
-                      <div className="font-medium text-[#2E2118]">{item.item}</div>
-                      <div className="text-[#6F5F51] bg-[#FAF5ED] px-2 py-1 rounded-sm border border-[#DDD0BD]">
-                        <span className="text-[10px] uppercase font-bold block text-[#8C7A68]">Current</span>
-                        {item.before}
+                    <div key={idx} className="p-3 text-xs space-y-1.5">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                        <span className="font-semibold text-[#2E2118]">{item.item}</span>
+                        {item.reason && (
+                          <span className="text-[11px] text-[#A8641A] font-medium">{item.reason}</span>
+                        )}
                       </div>
-                      <div className="text-[#7A1F2B] font-semibold bg-[#FFF8F0] px-2 py-1 rounded-sm border border-[#A8641A]/30">
-                        <span className="text-[10px] uppercase font-bold block text-[#A8641A]">Proposed</span>
-                        {item.after}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="text-[#6F5F51] bg-[#FAF5ED] px-2.5 py-1.5 rounded-sm border border-[#DDD0BD]">
+                          <span className="text-[10px] uppercase font-bold block text-[#8C7A68]">Current (Before)</span>
+                          {item.before}
+                        </div>
+                        <div className="text-[#7A1F2B] font-semibold bg-[#FFF8F0] px-2.5 py-1.5 rounded-sm border border-[#A8641A]/30">
+                          <span className="text-[10px] uppercase font-bold block text-[#A8641A]">Proposed (After)</span>
+                          {item.after}
+                        </div>
                       </div>
                     </div>
                   ))}

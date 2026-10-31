@@ -115,6 +115,14 @@ export interface EventPlan {
   itinerary: ItineraryItem[];
   photosCount?: number;
   visualInspiration?: VisualInspiration;
+  assumptions?: string[];
+  realism?: {
+    isUnrealistic: boolean;
+    warning?: string;
+    reducedPlanOffer?: string;
+    recommendedGuestCount?: number;
+    minPerGuestBenchmark?: number;
+  };
 }
 
 export interface ExtractedEventSlots {
@@ -159,10 +167,11 @@ export interface EventFormData {
 }
 
 export interface PlanDiffItem {
-  type: 'budget' | 'vendor' | 'timeline' | 'itinerary' | 'detail';
+  type: 'budget' | 'vendor' | 'timeline' | 'itinerary' | 'detail' | 'theme' | 'guestCount' | 'date' | 'city' | 'menu';
   item: string;
   before: string;
   after: string;
+  reason?: string;
 }
 
 export interface AIProposedChange {

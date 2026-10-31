@@ -71,6 +71,8 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
 
   const [savedEventId, setSavedEventId] = useState<string | null>(null);
   const [plan, setPlan] = useState<EventPlan | null>(null);
+  const [previousPlan, setPreviousPlan] = useState<EventPlan | null>(null);
+  const [pageProposal, setPageProposal] = useState<AIProposedChange | null>(null);
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
   const [tasks, setTasks] = useState<TimelineTask[]>([]);
   const [vendorComparisons, setVendorComparisons] = useState<VendorComparison[]>([]);
@@ -505,12 +507,17 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
   };
 
   const handleApplyPlanUpdate = (updatedPlan: EventPlan, updatedFormData?: Partial<EventFormData>) => {
+    if (plan) {
+      setPreviousPlan(JSON.parse(JSON.stringify(plan)));
+    }
+
     const mergedFormData = updatedFormData ? { ...formData, ...updatedFormData } : formData;
     if (updatedFormData) {
       setFormData(mergedFormData);
     }
     updatedPlan.budget = normalizeBudget(updatedPlan.budget, Number(mergedFormData.budgetINR) || 0);
     setPlan(updatedPlan);
+    setPageProposal(null);
     setNotification('Plan updated with your adjustments.');
     setTimeout(() => setNotification(''), 4000);
 
@@ -529,6 +536,15 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
     }
   };
 
+  const handleUndo = () => {
+    if (!previousPlan) return;
+    setPlan(previousPlan);
+    setPreviousPlan(null);
+    setPageProposal(null);
+    setNotification('Last change undone. Previous plan restored.');
+    setTimeout(() => setNotification(''), 4000);
+  };
+
   const handleUpdateEventFromWorkspace = (updated: SavedPlan) => {
     setPlan(updated.plan);
     setFormData(updated.formData);
@@ -543,7 +559,7 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
     if (!refineText.trim() || !plan) return;
 
     setRefining(true);
-    setStatusMessage('Updating plan and itinerary with your adjustments...');
+    setStatusMessage('Evaluating modification and preparing before and after proposal...');
     setErrorMessage('');
 
     try {
@@ -557,31 +573,26 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
         }),
       });
 
-      const data = await response.json();
-      if (data.plan) {
-        data.plan.budget = normalizeBudget(data.plan.budget, Number(formData.budgetINR) || 0);
-        setPlan(data.plan);
-        setRefineText('');
-        setNotification('Plan updated with your adjustments.');
-        setTimeout(() => setNotification(''), 4000);
+      if (!response.ok) {
+        throw new Error('Refinement request failed');
+      }
 
-        // Auto-persist if saved
-        if (savedEventId) {
-          persistEvent({
-            id: savedEventId,
-            title: `${formData.eventType || 'Event'} in ${formData.city || 'India'} (${formData.guestCount || 0} guests)`,
-            formData,
-            plan: data.plan,
-            expenses,
-            tasks,
-            vendorComparisons,
-            createdAt: initialPlanData?.createdAt || new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          }).catch(() => {});
-        }
+      const data = await response.json();
+      if (data.proposal) {
+        setPageProposal(data.proposal);
+        setRefineText('');
+      } else if (data.plan) {
+        setPageProposal({
+          id: `prop_${Date.now()}`,
+          title: 'Proposed Plan Revision',
+          explanation: refineText.trim(),
+          impactSummary: data.plan.summary,
+          updatedPlan: data.plan,
+        });
+        setRefineText('');
       }
     } catch {
-      setErrorMessage('The plan could not be updated. Check your connection and try again.');
+      setErrorMessage('The plan modification could not be prepared. Check your connection and try again.');
     } finally {
       setRefining(false);
       setStatusMessage('');
@@ -868,6 +879,8 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
             onOpenWorkspace={() => setIsWorkspaceOpen(true)}
             onSavePlan={handleSavePlan}
             isSaved={Boolean(savedEventId)}
+            onUndo={handleUndo}
+            canUndo={Boolean(previousPlan)}
           />
         </div>
 
@@ -1170,6 +1183,15 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
                   </h2>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  {previousPlan && (
+                    <button
+                      type="button"
+                      onClick={handleUndo}
+                      className="btn-secondary btn-small text-[var(--maroon)] font-semibold"
+                    >
+                      Undo
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setIsWorkspaceOpen(true)}
@@ -1200,6 +1222,54 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
                   </button>
                 </div>
               </div>
+
+              {/* Realistic Budget Warning Notice */}
+              {plan.realism?.isUnrealistic && (
+                <div className="p-3.5 mb-4 rounded border-2 border-[var(--warn)] bg-[var(--surface)] text-xs space-y-2">
+                  <div className="font-bold text-[var(--warn)] uppercase tracking-wider">
+                    Budget Benchmark Notice
+                  </div>
+                  <p className="text-[var(--text)] font-semibold">
+                    {plan.realism.warning}
+                  </p>
+                  <div className="p-2 rounded bg-[var(--surface-alt)] border border-[var(--border)] text-[var(--text)] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <span>{plan.realism.reducedPlanOffer}</span>
+                    {plan.realism.recommendedGuestCount && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (plan.realism?.recommendedGuestCount) {
+                            const updatedData: EventFormData = {
+                              ...formData,
+                              guestCount: plan.realism.recommendedGuestCount,
+                            };
+                            setFormData(updatedData);
+                            executePlanGeneration(updatedData);
+                          }
+                        }}
+                        className="btn-secondary btn-small whitespace-nowrap text-xs"
+                      >
+                        Adjust to {plan.realism.recommendedGuestCount} guests
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Explicit Assumptions List */}
+              {plan.assumptions && plan.assumptions.length > 0 && (
+                <div className="p-3 mb-4 rounded bg-[var(--surface)] border border-[var(--border)] text-xs">
+                  <span className="font-semibold text-[var(--brown)] block mb-1">
+                    Planning assumptions used:
+                  </span>
+                  <ul className="list-disc list-inside space-y-0.5 text-[var(--text-muted)]">
+                    {plan.assumptions.map((assump, idx) => (
+                      <li key={idx}>{assump}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <p className="text-[var(--text)] leading-relaxed">
                 {plan.summary}
               </p>
@@ -1598,8 +1668,86 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
                 Quick plan refinement
               </h2>
               <p className="text-sm text-[var(--text-muted)] mb-4">
-                Type an adjustment to modify budget percentages, move itinerary timings (for example, "move the cake cutting to 9 pm"), or alter vendor responsibilities.
+                Type an adjustment to modify budget percentages, move itinerary timings (for example, "move the cake cutting to 9 pm"), or alter vendor responsibilities. Requests return a proposed change with a before-and-after view for your approval.
               </p>
+
+              {/* Proposed Change Review Card with Before & After View */}
+              {pageProposal && (
+                <div className="mb-6 p-4 rounded-sm border-2 border-[var(--warn)] bg-[var(--surface)]">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-[var(--warn)] uppercase tracking-wider">
+                      Pending Plan Revision Proposal
+                    </span>
+                    <span className="text-xs text-[var(--text-muted)]">Review before applying</span>
+                  </div>
+
+                  <h3 className="font-serif font-bold text-base text-[var(--brown)] mb-1">
+                    {pageProposal.title}
+                  </h3>
+                  <p className="text-xs text-[var(--text-muted)] mb-3">{pageProposal.explanation}</p>
+
+                  {/* Before & After comparison */}
+                  {pageProposal.diff && pageProposal.diff.length > 0 && (
+                    <div className="my-3 border border-[var(--border)] rounded-sm bg-white overflow-hidden">
+                      <div className="bg-[var(--surface-alt)] px-3 py-1.5 font-semibold text-xs text-[var(--brown)] border-b border-[var(--border)]">
+                        Before and After Comparison
+                      </div>
+                      <div className="divide-y divide-[var(--border)]">
+                        {pageProposal.diff.map((item, idx) => (
+                          <div key={idx} className="p-3 text-xs space-y-1.5">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                              <span className="font-semibold text-[var(--text)]">{item.item}</span>
+                              {item.reason && (
+                                <span className="text-[11px] text-[var(--warn)] font-medium">{item.reason}</span>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <div className="text-[var(--text-muted)] bg-[var(--surface-alt)] px-2.5 py-1.5 rounded-sm border border-[var(--border)]">
+                                <span className="text-[10px] uppercase font-bold block text-[var(--text-muted)]">Current (Before)</span>
+                                {item.before}
+                              </div>
+                              <div className="text-[var(--maroon)] font-semibold bg-[#FFF8F0] px-2.5 py-1.5 rounded-sm border border-[var(--warn)]/40">
+                                <span className="text-[10px] uppercase font-bold block text-[var(--warn)]">Proposed (After)</span>
+                                {item.after}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="p-2.5 rounded-sm bg-[var(--surface-alt)] border border-[var(--border)] text-xs text-[var(--text)] mb-3">
+                    <strong className="block text-[var(--brown)] mb-0.5">Proposed Impact:</strong>
+                    {pageProposal.impactSummary}
+                  </div>
+
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (pageProposal.updatedPlan) {
+                          handleApplyPlanUpdate(pageProposal.updatedPlan as EventPlan, pageProposal.updatedFormData);
+                        }
+                      }}
+                      className="btn-primary btn-small"
+                    >
+                      Apply change
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPageProposal(null);
+                        setNotification('Proposed change discarded. Your plan remains untouched.');
+                        setTimeout(() => setNotification(''), 4000);
+                      }}
+                      className="btn-secondary btn-small"
+                    >
+                      Discard
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <form onSubmit={handleRefine} className="flex flex-col sm:flex-row gap-3">
                 <label htmlFor="refineInput" className="sr-only">
@@ -1619,7 +1767,7 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
                   disabled={refining || !refineText.trim()}
                   className="btn-primary whitespace-nowrap"
                 >
-                  {refining ? 'Updating...' : 'Apply change'}
+                  {refining ? 'Evaluating...' : 'Propose change'}
                 </button>
               </form>
 

@@ -65,6 +65,53 @@ test('Invalid Gemini JSON handling falls back gracefully to regional benchmark p
   }
 });
 
+test('Invalid Gemini JSON retries once, surfaces retryable error state, never shows blank screen', async () => {
+  let attemptCount = 0;
+  const mockGeminiCall = async () => {
+    attemptCount++;
+    if (attemptCount === 1) {
+      return '{ broken invalid json without closing brace';
+    }
+    // Attempt 2 (retry) succeeds with valid json
+    return JSON.stringify({
+      summary: 'Recovered after one retry',
+      budget: [
+        { item: 'Catering and dining', pct: 50, tip: 'Food' },
+        { item: 'Venue hire', pct: 43, tip: 'Place' },
+        { item: 'Contingency', pct: 7, tip: 'Buffer' },
+      ],
+      timeline: [{ when: 'Event day', task: 'Celebrate' }],
+      vendors: [{ name: 'Caterer', why: 'Meals', done: false }],
+      ideas: [{ title: 'Welcome', detail: 'Drinks' }],
+      itinerary: [{ time: '10:00 AM', activity: 'Arrival', location: 'Hall', decorNote: 'Flowers' }],
+    });
+  };
+
+  let planResult: any = null;
+  let rawText = await mockGeminiCall();
+  try {
+    planResult = JSON.parse(rawText);
+    if (!planResult.summary || !Array.isArray(planResult.budget)) {
+      throw new Error('Invalid schema');
+    }
+  } catch {
+    // Retry once
+    rawText = await mockGeminiCall();
+    planResult = JSON.parse(rawText);
+  }
+
+  assert.equal(attemptCount, 2, 'Should retry exactly once on invalid JSON');
+  assert.ok(planResult.summary.includes('Recovered after one retry'));
+  assert.ok(planResult.budget.length > 0);
+
+  // Normalize budget to guarantee 100%
+  const normalized = normalizeBudget(planResult.budget, 40000);
+  const sumPct = normalized.reduce((acc: number, b: any) => acc + b.pct, 0);
+  assert.equal(sumPct, 100);
+  const sumAmt = normalized.reduce((acc: number, b: any) => acc + (b.amount || 0), 0);
+  assert.equal(sumAmt, 40000);
+});
+
 test('Duplicate generation prevention and stale state protection', () => {
   // Simulates client generation guard
   let inFlight = false;

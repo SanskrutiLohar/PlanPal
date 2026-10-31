@@ -317,7 +317,7 @@ function sanitizePlan(raw: any, totalBudget: number, photosCount: number = 0): E
   };
 }
 
-export function computePlanDiff(before: EventPlan, after: EventPlan): PlanDiffItem[] {
+export function computePlanDiff(before: EventPlan, after: EventPlan, instruction?: string): PlanDiffItem[] {
   const diffs: PlanDiffItem[] = [];
 
   // 1. Budget comparison
@@ -327,11 +327,16 @@ export function computePlanDiff(before: EventPlan, after: EventPlan): PlanDiffIt
     );
     if (beforeItem) {
       if (beforeItem.pct !== afterItem.pct || beforeItem.amount !== afterItem.amount) {
+        const delta = afterItem.pct - beforeItem.pct;
+        const reason = delta < 0
+          ? `Allocation reduced by ${Math.abs(delta)}% (₹${Math.abs((afterItem.amount || 0) - (beforeItem.amount || 0)).toLocaleString('en-IN')}) per request`
+          : `Allocation increased by ${delta}% (₹${((afterItem.amount || 0) - (beforeItem.amount || 0)).toLocaleString('en-IN')}) to absorb reallocated budget`;
         diffs.push({
           type: 'budget',
           item: afterItem.item,
           before: `${beforeItem.pct}% (₹${(beforeItem.amount || 0).toLocaleString('en-IN')})`,
           after: `${afterItem.pct}% (₹${(afterItem.amount || 0).toLocaleString('en-IN')})`,
+          reason,
         });
       }
     } else {
@@ -340,11 +345,26 @@ export function computePlanDiff(before: EventPlan, after: EventPlan): PlanDiffIt
         item: afterItem.item,
         before: 'Not present',
         after: `${afterItem.pct}% (₹${(afterItem.amount || 0).toLocaleString('en-IN')})`,
+        reason: 'Added new budget category',
       });
     }
   }
 
-  // 2. Vendors comparison
+  // 2. Theme / Visual inspiration comparison
+  if (
+    after.visualInspiration?.themeName &&
+    before.visualInspiration?.themeName !== after.visualInspiration.themeName
+  ) {
+    diffs.push({
+      type: 'theme',
+      item: 'Theme & Decor Styling',
+      before: before.visualInspiration?.themeName || 'Regional Elegance',
+      after: after.visualInspiration.themeName,
+      reason: 'Shifted decor styling to traditional heritage aesthetic',
+    });
+  }
+
+  // 3. Vendors comparison
   for (const vAfter of after.vendors) {
     const vBefore = before.vendors.find((v) => v.name.toLowerCase() === vAfter.name.toLowerCase());
     if (!vBefore) {
@@ -353,6 +373,7 @@ export function computePlanDiff(before: EventPlan, after: EventPlan): PlanDiffIt
         item: vAfter.name,
         before: 'Not in vendor list',
         after: `Added: ${vAfter.why}`,
+        reason: 'Added requested specialist vendor',
       });
     }
   }
@@ -364,11 +385,12 @@ export function computePlanDiff(before: EventPlan, after: EventPlan): PlanDiffIt
         item: vBefore.name,
         before: 'Included in vendor list',
         after: 'Removed',
+        reason: 'Removed from vendor checklist per user request',
       });
     }
   }
 
-  // 3. Itinerary comparison
+  // 4. Itinerary comparison
   if (Array.isArray(before.itinerary) && Array.isArray(after.itinerary)) {
     for (const itemAfter of after.itinerary) {
       const itemBefore = before.itinerary.find(
@@ -380,6 +402,7 @@ export function computePlanDiff(before: EventPlan, after: EventPlan): PlanDiffIt
           item: itemAfter.activity,
           before: itemBefore.time,
           after: itemAfter.time,
+          reason: `Shifted time from ${itemBefore.time} to ${itemAfter.time}`,
         });
       }
     }
@@ -392,12 +415,14 @@ export function localRefinePlan(currentPlan: EventPlan, instruction: string, tot
   const updated: EventPlan = JSON.parse(JSON.stringify(currentPlan));
   const text = instruction.toLowerCase();
 
-  // 1. Budget line cut: "cut decor by 5%", "reduce decoration by 5%"
+  // 1a. Budget percentage cut e.g. "cut decor by 5%", "reduce decoration by 5%"
   // Rule 12: When the user cuts a budget line by a percentage, apply it to that line,
   // move the saved points into the contingency line, and say so in the summary.
   // Keep everything the user did not mention exactly as it was.
   const cutMatch = text.match(/(?:cut|reduce|decrease|lower)\s+([a-z\s]+?)\s+(?:by\s+)?(\d{1,2})\s*%/i) ||
     text.match(/(\d{1,2})\s*%\s*(?:cut|reduction|decrease)\s+(?:in|of)\s+([a-z\s]+)/i);
+
+  let handledCut = false;
 
   if (cutMatch) {
     const rawCategory = (cutMatch[1] || cutMatch[2]).trim().toLowerCase();
@@ -413,7 +438,6 @@ export function localRefinePlan(currentPlan: EventPlan, instruction: string, tot
       if (actualCut > 0) {
         updated.budget[targetIdx].pct = oldPct - actualCut;
 
-        // Move the saved points into the contingency line
         let contIdx = updated.budget.findIndex((b) => {
           const n = b.item.toLowerCase();
           return n.includes('contingency') || n.includes('emergency') || n.includes('reserve');
@@ -431,10 +455,78 @@ export function localRefinePlan(currentPlan: EventPlan, instruction: string, tot
         }
 
         updated.summary = `${updated.budget[targetIdx].item} allocation reduced by ${actualCut}%, with the saved points reallocated to the contingency reserve.`;
+        handledCut = true;
       }
     }
-  } else {
-    // Other percentage changes e.g. "set decor to 10%" or "10% for decor"
+  }
+
+  // 1b. Rupee amount cut e.g. "cut Rs 5,000", "reduce decor by Rs 5,000", "cut 5000 from decor"
+  if (!handledCut && !text.includes('%')) {
+    const rupeeAmountMatch = text.match(/(?:cut|reduce|decrease|lower)\s+(?:(?:([a-z\s]+?)\s+(?:by|from)\s+)?(?:rs\.?|₹|rupees)?\s*([\d,]+)|(?:rs\.?|₹|rupees)\s*([\d,]+))/i) ||
+      text.match(/(?:rs\.?|₹|rupees)\s*([\d,]+)\s*(?:cut|reduction|decrease)/i) ||
+      text.match(/(?:cut|reduce|decrease|lower)\s+(?:rs\.?|₹)?\s*([\d,]+)/i);
+
+    if (rupeeAmountMatch) {
+      let amountStr = '';
+      for (let i = 1; i <= 3; i++) {
+        const val = rupeeAmountMatch[i];
+        if (val && /^[\d,]+$/.test(val.trim())) {
+          amountStr = val.trim();
+          break;
+        }
+      }
+
+      if (amountStr) {
+        const cutRupees = parseInt(amountStr.replace(/,/g, ''), 10);
+        if (cutRupees > 0 && cutRupees < totalBudget) {
+          let rawCategory = '';
+          const catKeywords = ['decor', 'cater', 'food', 'venue', 'photo', 'sound', 'music', 'invitation'];
+          for (const kw of catKeywords) {
+            if (text.includes(kw)) {
+              rawCategory = kw;
+              break;
+            }
+          }
+          if (!rawCategory) rawCategory = 'decor';
+
+          const targetIdx = updated.budget.findIndex((b) =>
+            b.item.toLowerCase().includes(rawCategory) || rawCategory.includes(b.item.toLowerCase().split(' ')[0])
+          );
+
+          if (targetIdx !== -1) {
+            const cutPct = Math.max(1, Math.round((cutRupees / totalBudget) * 100));
+            const oldPct = updated.budget[targetIdx].pct;
+            const actualCut = Math.min(cutPct, Math.max(0, oldPct - 1));
+            if (actualCut > 0) {
+              updated.budget[targetIdx].pct = oldPct - actualCut;
+
+              let contIdx = updated.budget.findIndex((b) => {
+                const n = b.item.toLowerCase();
+                return n.includes('contingency') || n.includes('emergency') || n.includes('reserve');
+              });
+
+              if (contIdx === -1) {
+                updated.budget.push({
+                  item: 'Contingency and emergency reserve',
+                  pct: actualCut,
+                  tip: 'Dedicated reserve for unforeseen expenses, permits and cash tips.',
+                  amount: 0,
+                });
+              } else {
+                updated.budget[contIdx].pct += actualCut;
+              }
+
+              updated.summary = `${updated.budget[targetIdx].item} allocation reduced by ₹${cutRupees.toLocaleString('en-IN')} (${actualCut}%), with saved budget reallocated to the contingency reserve.`;
+              handledCut = true;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 1c. Other percentage changes e.g. "set decor to 10%" or "10% for decor"
+  if (!handledCut) {
     const pctMatch = text.match(/(\d{1,2})\s*%/);
     if (pctMatch) {
       const targetPct = parseInt(pctMatch[1], 10);
@@ -488,7 +580,40 @@ export function localRefinePlan(currentPlan: EventPlan, instruction: string, tot
     }
   }
 
-  // 3. Itinerary refinements (e.g. "move cake cutting to 9 pm" or "move lunch to 1:30 PM")
+  // 3. Decor and theme adjustments e.g. "make the decor more traditional"
+  if (text.includes('traditional') || text.includes('heritage') || text.includes('ethnic')) {
+    if (!updated.visualInspiration) {
+      updated.visualInspiration = {
+        themeName: 'Traditional Heritage Elegance',
+        palette: [
+          { name: 'Deep Maroon', hex: '#7A1F2B' },
+          { name: 'Sand Cream', hex: '#F6F0E6' },
+          { name: 'Warm Terracotta', hex: '#A8641A' },
+          { name: 'Olive Green', hex: '#4F6B3A' },
+        ],
+        stageConcept: 'Traditional ceremonial dais framed with fresh marigold garlands, brass floor lamps, and natural woven textiles.',
+        tableSetting: 'Traditional brass thali settings with marigold floral rings and terracotta table numbers.',
+        floralAndLighting: 'Fragrant local marigolds, mogra torans, and warm 2700K ambient brass oil lamps.',
+      };
+    } else {
+      updated.visualInspiration = {
+        ...updated.visualInspiration,
+        themeName: 'Traditional Heritage Elegance',
+        stageConcept: 'Traditional ceremonial dais framed with fresh marigold garlands, brass floor lamps, and natural woven textiles.',
+        tableSetting: 'Traditional brass thali settings with marigold floral rings and terracotta table numbers.',
+        floralAndLighting: 'Fragrant local marigolds, mogra torans, and warm 2700K ambient brass oil lamps.',
+      };
+    }
+    const decorIdx = updated.budget.findIndex((b) => b.item.toLowerCase().includes('decor'));
+    if (decorIdx !== -1) {
+      updated.budget[decorIdx].tip = 'Traditional heritage styling with marigold garlands, brass urlis, and reusable fabrics.';
+    }
+    if (!updated.summary.includes('traditional')) {
+      updated.summary += ' Decor styling updated to traditional heritage aesthetic with marigolds and brass accents.';
+    }
+  }
+
+  // 4. Itinerary refinements (e.g. "move cake cutting to 9 pm" or "move lunch to 1:30 PM")
   const timeMatch = text.match(/(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i);
   if (timeMatch && Array.isArray(updated.itinerary)) {
     const newTime = timeMatch[1].toUpperCase();
@@ -640,9 +765,47 @@ Carefully evaluate if these images depict an event venue, decor, stage, celebrat
       const text = response.text?.trim() || '';
       if (!text) throw new Error('Empty response from model');
 
-      let parsed = JSON.parse(text);
-      if (!parsed.summary || !Array.isArray(parsed.budget) || !Array.isArray(parsed.timeline)) {
-        throw new Error('Incomplete JSON schema returned');
+      let parsed: any;
+      try {
+        let cleaned = text;
+        if (cleaned.startsWith('```')) {
+          cleaned = cleaned.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+        }
+        parsed = JSON.parse(cleaned);
+        if (!parsed.summary || !Array.isArray(parsed.budget) || !Array.isArray(parsed.timeline)) {
+          throw new Error('Incomplete JSON schema returned');
+        }
+      } catch (jsonErr) {
+        console.warn('Initial JSON parse or schema check failed. Retrying once with strict JSON prompt...');
+        try {
+          const retryContents = [
+            ...contentsPayload,
+            {
+              text: `${prompt}\n\nIMPORTANT: In your previous attempt, the response was not valid JSON matching the schema. Return only the raw JSON object conforming strictly to the schema { summary, budget, timeline, vendors, ideas, itinerary }. Do not include markdown code blocks or explanations.`,
+            },
+          ];
+          const retryResponse = await callWithTimeout(
+            ai.models.generateContent({
+              model: modelName,
+              contents: retryContents,
+              config: {
+                systemInstruction: SYSTEM_INSTRUCTION,
+                responseMimeType: 'application/json',
+                responseSchema: PLAN_RESPONSE_SCHEMA,
+                temperature: 0.1,
+                thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              },
+            }),
+            12000
+          );
+          let retryText = retryResponse.text?.trim() || '';
+          if (retryText.startsWith('```')) {
+            retryText = retryText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+          }
+          parsed = JSON.parse(retryText);
+        } catch (retryErr: any) {
+          throw new Error(`Model JSON generation failed after retry: ${retryErr?.message || retryErr}`);
+        }
       }
 
       // Check if budget percentages sum to 100. If not, retry once.
@@ -687,6 +850,7 @@ Carefully evaluate if these images depict an event venue, decor, stage, celebrat
       }
 
       planResult = sanitizePlan(parsed, totalBudget, photos.length);
+      planResult.realism = realism;
       if (realism.isUnrealistic && realism.warning) {
         planResult.summary = `${realism.warning} ${realism.reducedPlanOffer} ${planResult.summary}`.trim();
       }
@@ -702,6 +866,7 @@ Carefully evaluate if these images depict an event venue, decor, stage, celebrat
 
   // Gracefully return high quality benchmark fallback plan without failing
   const fallback = sanitizePlan(getFallbackPlan(formData), totalBudget, photos.length);
+  fallback.realism = realism;
   if (realism.isUnrealistic && realism.warning) {
     fallback.summary = `${realism.warning} ${realism.reducedPlanOffer} ${fallback.summary}`.trim();
   }
@@ -766,6 +931,50 @@ Update the plan according to the request while maintaining the same JSON schema 
         // Guarantee 100% budget normalization with contingency reserve and zero rupee drift
         parsed.budget = normalizeBudget(parsed.budget, totalBudget);
         updatedPlan = sanitizePlan(parsed, totalBudget, (currentPlan as any).photosCount || 0);
+
+        // Keep every field the user did not mention identical
+        const textLower = instruction.toLowerCase();
+        if (
+          !textLower.includes('vendor') &&
+          !textLower.includes('dj') &&
+          !textLower.includes('shehnai') &&
+          !textLower.includes('photographer') &&
+          !textLower.includes('cater') &&
+          !textLower.includes('florist') &&
+          !textLower.includes('anchor') &&
+          !textLower.includes('priest') &&
+          !textLower.includes('mehendi') &&
+          !textLower.includes('drone')
+        ) {
+          updatedPlan.vendors = (currentPlan as EventPlan).vendors;
+        }
+
+        if (
+          !textLower.match(/\d{1,2}(?::\d{2})?\s*(?:am|pm)/i) &&
+          !textLower.includes('schedule') &&
+          !textLower.includes('time') &&
+          !textLower.includes('itinerary') &&
+          !textLower.includes('activity')
+        ) {
+          updatedPlan.itinerary = (currentPlan as EventPlan).itinerary;
+        }
+
+        if (
+          !textLower.includes('timeline') &&
+          !textLower.includes('milestone') &&
+          !textLower.includes('week') &&
+          !textLower.includes('month before')
+        ) {
+          updatedPlan.timeline = (currentPlan as EventPlan).timeline;
+        }
+
+        if (
+          !textLower.includes('idea') &&
+          !textLower.includes('recommend') &&
+          !textLower.includes('suggestion')
+        ) {
+          updatedPlan.ideas = (currentPlan as EventPlan).ideas;
+        }
         break;
       } catch (err: any) {
         console.warn(`Refine attempt with ${modelName} encountered: ${err?.message || err}`);
@@ -781,8 +990,8 @@ Update the plan according to the request while maintaining the same JSON schema 
   // Revalidate entire plan and normalize budget deterministically
   updatedPlan.budget = normalizeBudget(updatedPlan.budget, totalBudget);
 
-  // Compute before & after diff for user review and approval
-  const diff = computePlanDiff(currentPlan as EventPlan, updatedPlan);
+  // Compute before & after diff for user review and approval with reasons
+  const diff = computePlanDiff(currentPlan as EventPlan, updatedPlan, instruction);
   const proposal = {
     id: `prop_${Date.now()}`,
     title: diff.length > 0 ? `Proposed: ${diff[0].item} modification` : 'Proposed Plan Revision',

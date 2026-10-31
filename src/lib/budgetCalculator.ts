@@ -2,10 +2,10 @@ import { BudgetItem, EventDashboardStats, SavedPlan, TimelineTask, VendorItem } 
 
 /**
  * Normalizes budget percentages and amounts:
- * 1. Ensures every percentage is a non-negative integer.
+ * 1. Ensures every percentage is a non-negative integer (rejects negative allocations).
  * 2. Guarantees percentages sum to exactly 100%.
  * 3. Introduces/maintains a contingency reserve of 5-10% (default 7%).
- * 4. Ensures rupee amounts sum to the exact total budget with a deterministic remainder rule and no negatives.
+ * 4. Ensures rupee amounts sum to the exact total budget with a deterministic remainder rule (give leftover rupees to the largest line) and no negatives.
  */
 export function normalizeBudget(
   rawItems: BudgetItem[],
@@ -25,10 +25,11 @@ export function normalizeBudget(
     return allocateRupeeAmounts(basePcts, safeTotal);
   }
 
-  // Clone items and ensure non-negative integers
+  // Reject negative allocations and ensure non-negative integers
   let items = rawItems.map((b) => ({
     ...b,
     pct: Math.max(0, Math.round(Number(b.pct) || 0)),
+    amount: b.amount !== undefined ? Math.max(0, Math.round(Number(b.amount) || 0)) : undefined,
   }));
 
   // Check if contingency line exists
@@ -77,14 +78,26 @@ export function normalizeBudget(
     }
   }
 
-  return allocateRupeeAmounts(items, safeTotal);
+  const allocated = allocateRupeeAmounts(items, safeTotal);
+
+  // Verification pass: enforce 100% and safeTotal in code
+  const sumPct = allocated.reduce((acc, b) => acc + b.pct, 0);
+  const sumAmt = allocated.reduce((acc, b) => acc + (b.amount || 0), 0);
+  if (sumPct !== 100 && allocated.length > 0) {
+    allocated[0].pct += (100 - sumPct);
+  }
+  if (sumAmt !== safeTotal && allocated.length > 0) {
+    allocated[0].amount = Math.max(0, (allocated[0].amount || 0) + (safeTotal - sumAmt));
+  }
+
+  return allocated;
 }
 
 /**
  * Deterministic remainder distribution rule:
  * 1. Base amount: Math.floor((pct / 100) * totalBudget)
  * 2. Calculate remaining rupees = totalBudget - sum(base amounts)
- * 3. Distribute exactly 1 rupee to items sorted deterministically by percentage descending, then name ascending
+ * 3. Give leftover rupees to the largest line (highest percentage, then alphabetical name tie-break)
  * 4. Guarantees amounts sum exactly to totalBudget with zero negatives
  */
 function allocateRupeeAmounts(items: BudgetItem[], totalBudget: number): BudgetItem[] {
@@ -101,18 +114,24 @@ function allocateRupeeAmounts(items: BudgetItem[], totalBudget: number): BudgetI
   });
 
   const remainder = totalBudget - totalAllocated;
-  if (remainder > 0) {
+  if (remainder > 0 && result.length > 0) {
     const sortedIndices = result
       .map((b, idx) => ({ idx, pct: b.pct, name: b.item }))
       .sort((a, b) => b.pct - a.pct || a.name.localeCompare(b.name));
 
-    for (let i = 0; i < remainder; i++) {
-      const targetIdx = sortedIndices[i % sortedIndices.length].idx;
-      result[targetIdx].amount = (result[targetIdx].amount || 0) + 1;
-    }
+    const largestIdx = sortedIndices[0].idx;
+    result[largestIdx].amount = (result[largestIdx].amount || 0) + remainder;
   }
 
   return result;
+}
+
+/**
+ * Validates budget items for negative allocations or invalid values
+ */
+export function validateBudgetAllocations(items: BudgetItem[]): boolean {
+  if (!Array.isArray(items) || items.length === 0) return false;
+  return !items.some((b) => Number(b.pct) < 0 || (b.amount !== undefined && Number(b.amount) < 0));
 }
 
 export interface BudgetRealismAssessment {
