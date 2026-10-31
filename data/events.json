@@ -1,0 +1,260 @@
+{
+  "test_user_1": [
+    {
+      "id": "test_ev_1",
+      "title": "Birthday in Pune (50 guests)",
+      "formData": {
+        "eventType": "Birthday",
+        "guestCount": 50,
+        "budgetINR": 100000,
+        "city": "Pune",
+        "date": "2026-11-20"
+      },
+      "plan": {
+        "summary": "Birthday celebration for 50 guests in Pune with curated catering, family activities and return gifts.",
+        "budget": [
+          {
+            "item": "Food and beverages",
+            "pct": 40,
+            "tip": "Include child-friendly finger foods alongside regional hot snacks.",
+            "amount": 40000
+          },
+          {
+            "item": "Venue and basic decor",
+            "pct": 25,
+            "tip": "Book a banquet hall with in-house sound to save on transport fees.",
+            "amount": 25000
+          },
+          {
+            "item": "Cake and desserts",
+            "pct": 10,
+            "tip": "Order 100 grams of cake per attendee plus seasonal fresh fruit tarts.",
+            "amount": 10000
+          },
+          {
+            "item": "Entertainment and host",
+            "pct": 10,
+            "tip": "Engage a local anchor for interactive party games and music.",
+            "amount": 10000
+          },
+          {
+            "item": "Return gifts and favours",
+            "pct": 10,
+            "tip": "Choose educational books, wooden puzzles or local potted saplings.",
+            "amount": 10000
+          },
+          {
+            "item": "Photography and contingency",
+            "pct": 5,
+            "tip": "Keep a small cash buffer for last-minute ice, water and battery packs.",
+            "amount": 5000
+          }
+        ],
+        "timeline": [
+          {
+            "when": "4 weeks before",
+            "task": "Finalise venue booking and confirm party menu with the caterer."
+          },
+          {
+            "when": "2 weeks before",
+            "task": "Send digital invitations and order customized birthday cake and return gifts."
+          },
+          {
+            "when": "1 week before",
+            "task": "Reconfirm guest RSVPs and prepare music playlist and game materials."
+          },
+          {
+            "when": "1 day before",
+            "task": "Inspect balloon and floral delivery items, pick up cake advance voucher."
+          },
+          {
+            "when": "Event day morning",
+            "task": "Supervise venue setup, test microphone and arrange return gift counter."
+          },
+          {
+            "when": "Event day evening",
+            "task": "Welcome guests, coordinate cake cutting and settle vendor balances."
+          }
+        ],
+        "vendors": [
+          {
+            "name": "Banquet Venue Coordinator",
+            "why": "Secures hall air conditioning, furniture layout and sound permissions.",
+            "done": false
+          },
+          {
+            "name": "Party Caterer",
+            "why": "Provides fresh hot food, live chaat counter and service staff.",
+            "done": false
+          },
+          {
+            "name": "Custom Baker",
+            "why": "Bakes themed cake on schedule with safe delivery packaging.",
+            "done": false
+          },
+          {
+            "name": "Party Decorator",
+            "why": "Sets up photo backdrop, lighting and welcome board before guests arrive.",
+            "done": false
+          },
+          {
+            "name": "Event Photographer",
+            "why": "Captures family portraits and candids during cake cutting.",
+            "done": false
+          }
+        ],
+        "ideas": [
+          {
+            "title": "DIY memory wall",
+            "detail": "Display polaroid prints of the birthday person across their milestone years on a jute string."
+          },
+          {
+            "title": "Local artisan return gifts",
+            "detail": "Replace plastic knickknacks with handcrafted clay toys, seed pencils or jute pouches."
+          },
+          {
+            "title": "Live food station",
+            "detail": "Set up an interactive kulfi or jalebi counter that delights both children and grandparents."
+          }
+        ],
+        "itinerary": [
+          {
+            "time": "04:00 PM",
+            "activity": "Decor inspection and sound check",
+            "location": "Main hall",
+            "decorNote": "Themed backdrop and welcome board in position"
+          },
+          {
+            "time": "05:00 PM",
+            "activity": "Guest arrival and welcome refreshments",
+            "location": "Entrance foyer",
+            "decorNote": "Soft background music and drinks station open"
+          },
+          {
+            "time": "05:30 PM",
+            "activity": "Interactive party games and music",
+            "location": "Activity play zone",
+            "decorNote": "Open carpeted area with safe balloon arrangements"
+          },
+          {
+            "time": "06:45 PM",
+            "activity": "Cake cutting ceremony",
+            "location": "Central stage",
+            "decorNote": "Spotlight focused on birthday cake table"
+          },
+          {
+            "time": "07:15 PM",
+            "activity": "Buffet dinner and live food counter",
+            "location": "Dining area",
+            "decorNote": "Hot food stations arranged for smooth queue flow"
+          },
+          {
+            "time": "08:30 PM",
+            "activity": "Return gift distribution and farewell",
+            "location": "Exit desk",
+            "decorNote": "Gift counter with personalised thank you cards"
+          }
+        ],
+        "photoAnalysis": null,
+        "photosCount": 0
+      },
+      "expenses": [
+        {
+          "id": "exp_1",
+          "title": "Hall token",
+          "category": "Venue",
+          "amount": 15000,
+          "date": "2026-10-31",
+          "paymentMode": "UPI"
+        }
+      ],
+      "userId": "test_user_1",
+      "updatedAt": "2026-10-31T11:35:55.609Z",
+      "createdAt": "2026-10-31T11:35:55.609Z"
+    }
+  ],
+  "usr_test_100": [
+    {
+      "id": "plan_test_999",
+      "title": "Wedding in Mumbai (300 guests)",
+      "formData": {
+        "eventType": "Wedding",
+        "guestCount": 300,
+        "budgetINR": 1500000,
+        "city": "Mumbai",
+        "date": "2026-12-25"
+      },
+      "plan": {
+        "summary": "Wedding in Mumbai",
+        "budget": [
+          {
+            "item": "Catering",
+            "pct": 40,
+            "amount": 600000,
+            "tip": "Buffet"
+          },
+          {
+            "item": "Venue",
+            "pct": 30,
+            "amount": 450000,
+            "tip": "AC hall"
+          },
+          {
+            "item": "Decor",
+            "pct": 15,
+            "amount": 225000,
+            "tip": "Floral"
+          },
+          {
+            "item": "Contingency and reserve",
+            "pct": 15,
+            "amount": 225000,
+            "tip": "Buffer"
+          }
+        ],
+        "timeline": [
+          {
+            "when": "4 weeks before",
+            "task": "Book hall"
+          }
+        ],
+        "vendors": [
+          {
+            "name": "Caterer",
+            "why": "Food",
+            "done": false,
+            "quotedPrice": 600000,
+            "advancePaid": 150000
+          }
+        ],
+        "ideas": [
+          {
+            "title": "Welcome drinks",
+            "detail": "Coconut water"
+          }
+        ],
+        "itinerary": [
+          {
+            "time": "10:00 AM",
+            "activity": "Arrival",
+            "location": "Hall",
+            "decorNote": "Flowers"
+          }
+        ]
+      },
+      "expenses": [
+        {
+          "id": "exp_1",
+          "title": "Caterer token",
+          "category": "Catering",
+          "amount": 150000,
+          "date": "2026-10-31",
+          "paymentMode": "UPI"
+        }
+      ],
+      "userId": "usr_test_100",
+      "updatedAt": "2026-10-31T11:36:05.708Z",
+      "createdAt": "2026-10-31T11:36:05.708Z"
+    }
+  ]
+}

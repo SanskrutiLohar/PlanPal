@@ -1,0 +1,6 @@
+{
+  "name": "PlanPal",
+  "description": "Plan weddings, birthdays, and community events in India with a clear budget, dated timeline, and vendor checklist.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
