@@ -469,6 +469,7 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
     }
   };
 
+  // Vendor checklist completion toggle with auto-persistence
   const handleToggleVendorDone = (idx: number) => {
     if (!plan || !plan.vendors || !plan.vendors[idx]) return;
     const updatedVendors = plan.vendors.map((v, i) =>
