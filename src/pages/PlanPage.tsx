@@ -469,6 +469,34 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
     }
   };
 
+  const handleToggleVendorDone = (idx: number) => {
+    if (!plan || !plan.vendors || !plan.vendors[idx]) return;
+    const updatedVendors = plan.vendors.map((v, i) =>
+      i === idx ? { ...v, done: !v.done } : v
+    );
+    const updatedPlan: EventPlan = {
+      ...plan,
+      vendors: updatedVendors,
+    };
+    setPlan(updatedPlan);
+
+    if (savedEventId) {
+      persistEvent({
+        id: savedEventId,
+        title: `${formData.eventType || 'Event'} in ${formData.city || 'India'} (${formData.guestCount || 0} guests)`,
+        formData,
+        plan: updatedPlan,
+        colourPalette: updatedPlan.colourPalette,
+        savedPalettes: updatedPlan.savedPalettes,
+        expenses: [],
+        tasks,
+        vendorComparisons: [],
+        createdAt: initialPlanData?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }).catch(() => {});
+    }
+  };
+
   const handleCopyWhatsAppSummary = () => {
     if (!plan) return;
     const costPerGuest = formData.budgetINR && formData.guestCount ? Math.round(formData.budgetINR / Math.max(1, formData.guestCount)) : 0;
@@ -668,15 +696,22 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
             {/* Summary section */}
             <div ref={sectionRefs.summary}>
               <div className="card p-6 bg-[var(--surface-alt)]">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-3 border-b border-[var(--border)]">
                   <div>
-                    {formData.eventType && <span className="tag mb-2">{formData.eventType}</span>}
-                    <h2 className="text-2xl font-serif text-[var(--brown)]">
+                    {formData.eventType && <span className="tag mb-2 inline-block">{formData.eventType}</span>}
+                    <h2 className="text-2xl font-serif text-[var(--brown)] font-bold">
                       Plan summary
                     </h2>
                   </div>
-                  {/* Action row: Copy summary (Save plan is in the primary chat header) */}
-                  <div className="flex flex-wrap gap-2">
+                  {/* Action row: Save plan & Copy summary properly aligned */}
+                  <div className="flex items-center gap-2 self-start sm:self-center shrink-0 flex-wrap sm:flex-nowrap">
+                    <button
+                      type="button"
+                      onClick={handleSavePlan}
+                      className="btn-primary btn-small min-h-[44px]"
+                    >
+                      {savedEventId ? 'Saved plan' : 'Save plan'}
+                    </button>
                     <button
                       type="button"
                       onClick={handleCopyWhatsAppSummary}
@@ -959,30 +994,65 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
             {/* Vendor checklist */}
             <div ref={sectionRefs.vendors}>
               <section className="card-result p-6">
-                <div className="mb-6">
-                  <h2 className="text-2xl font-serif text-[var(--brown)] mb-1">
-                    Vendor checklist
-                  </h2>
-                  <p className="text-sm text-[var(--text-muted)]">
-                    Recommended vendors to book for your event.
-                  </p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 pb-3 border-b border-[var(--border)]">
+                  <div>
+                    <h2 className="text-2xl font-serif text-[var(--brown)] mb-1 font-bold">
+                      Vendor checklist
+                    </h2>
+                    <p className="text-sm text-[var(--text-muted)]">
+                      Recommended vendors to book for your event.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 self-start sm:self-center">
+                    <span className="text-xs px-3 py-1.5 rounded font-semibold border border-[var(--border)] bg-[var(--surface-alt)] text-[var(--brown)] tabular-nums">
+                      {plan.vendors.filter((v) => v.done).length} of {plan.vendors.length} completed
+                    </span>
+                  </div>
                 </div>
 
                 <div className="space-y-3">
                   {plan.vendors.map((v, idx) => (
-                    <div
+                    <label
                       key={v.name + idx}
-                      className="p-4 rounded border border-[var(--border)] bg-[var(--surface)] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                      className={`p-4 rounded border transition-all cursor-pointer flex items-start sm:items-center gap-3.5 min-h-[56px] select-none ${
+                        v.done
+                          ? 'border-[var(--ok)] bg-[#F4F9F5] opacity-95'
+                          : 'border-[var(--border)] bg-[var(--surface)] hover:border-[var(--brown)]'
+                      }`}
                     >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className={`inline-block w-2.5 h-2.5 rounded-full ${v.done ? 'bg-[var(--ok)]' : 'bg-[var(--text-muted)]'}`} />
-                          <span className="font-semibold text-sm text-[var(--text)]">{v.name}</span>
-                          <span className="text-xs text-[var(--text-muted)]">{v.done ? 'Booked' : 'Pending'}</span>
-                        </div>
-                        <p className="text-xs text-[var(--text-muted)] leading-relaxed">{v.why}</p>
+                      <div className="flex items-center justify-center min-w-[44px] min-h-[44px] -ml-2 -my-2 shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(v.done)}
+                          onChange={() => handleToggleVendorDone(idx)}
+                          className="h-5 w-5 rounded border-[var(--border)] text-[var(--maroon)] focus:ring-[var(--maroon)] cursor-pointer accent-[var(--maroon)]"
+                          aria-label={`Mark ${v.name} as ${v.done ? 'Pending' : 'Completed'}`}
+                        />
                       </div>
-                    </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-1 justify-between">
+                          <span
+                            className={`font-semibold text-sm ${
+                              v.done ? 'line-through text-[var(--text-muted)]' : 'text-[var(--text)]'
+                            }`}
+                          >
+                            {v.name}
+                          </span>
+                          <span
+                            className={`text-[11px] font-bold px-2 py-0.5 rounded uppercase tracking-wider shrink-0 ${
+                              v.done
+                                ? 'bg-[#E6F4EA] text-[var(--ok)] border border-[#C6ECCB]'
+                                : 'bg-[var(--surface-alt)] text-[var(--text-muted)] border border-[var(--border)]'
+                            }`}
+                          >
+                            {v.done ? 'Completed' : 'Pending'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+                          {v.why}
+                        </p>
+                      </div>
+                    </label>
                   ))}
                 </div>
               </section>

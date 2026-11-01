@@ -222,8 +222,9 @@ export const ColourStudio: React.FC<ColourStudioProps> = ({
   return (
     <section className="card-result p-6 transition-all duration-200">
       {/* Header and Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-4 border-b border-[var(--border)]">
-        <div>
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 pb-4 border-b border-[var(--border)]">
+        {/* LEFT: Palette name and description */}
+        <div className="flex-1 min-w-0 pr-0 lg:pr-4">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-semibold tracking-wider text-[var(--warn)] uppercase">
               AI Colour Studio
@@ -232,7 +233,7 @@ export const ColourStudio: React.FC<ColourStudioProps> = ({
               {isFallbackMode ? 'Curated benchmark' : 'Gemini AI generated'}
             </span>
           </div>
-          <h2 className="text-2xl font-serif text-[var(--brown)] font-bold">
+          <h2 className="text-2xl font-serif text-[var(--brown)] font-bold truncate">
             {currentPalette.name}
           </h2>
           <p className="text-sm text-[var(--text-muted)] mt-1 max-w-2xl leading-relaxed">
@@ -240,17 +241,17 @@ export const ColourStudio: React.FC<ColourStudioProps> = ({
           </p>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* RIGHT: Previous Palette, Shuffle Palette, Save Palette (aligned horizontally on desktop) */}
+        <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
           {historyIndex > 0 && (
             <button
               type="button"
               onClick={handlePrevious}
               disabled={isLoading || isRefining}
-              className="btn-secondary btn-small min-h-[44px] flex items-center gap-1.5"
+              className="btn-secondary btn-small min-h-[44px] flex items-center gap-1.5 whitespace-nowrap"
               title="Return to previous palette"
             >
-              <span>Previous</span>
+              <span>Previous Palette</span>
             </button>
           )}
 
@@ -258,7 +259,7 @@ export const ColourStudio: React.FC<ColourStudioProps> = ({
             type="button"
             onClick={handleShuffle}
             disabled={isLoading || isRefining}
-            className="btn-secondary btn-small min-h-[44px] flex items-center gap-1.5 font-semibold text-[var(--brown)]"
+            className="btn-secondary btn-small min-h-[44px] flex items-center gap-1.5 font-semibold text-[var(--brown)] whitespace-nowrap"
             title="Generate a completely new AI palette"
           >
             {isLoading ? (
@@ -272,7 +273,7 @@ export const ColourStudio: React.FC<ColourStudioProps> = ({
             type="button"
             onClick={handleSave}
             disabled={isLoading || isRefining}
-            className="btn-primary btn-small min-h-[44px] flex items-center gap-1.5"
+            className="btn-primary btn-small min-h-[44px] flex items-center gap-1.5 whitespace-nowrap"
             title="Save palette with this event"
           >
             <span>{isSaved ? 'Saved Palette' : 'Save Palette'}</span>
@@ -299,53 +300,57 @@ export const ColourStudio: React.FC<ColourStudioProps> = ({
         </div>
       )}
 
-      {/* Main Colour Swatches: 5-Col Grid with high visibility */}
+      {/* Main Colour Swatches: Two-column grid on desktop, One column on mobile */}
       <div className="mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {currentPalette.colours.map((colour, idx) => {
             const isCopied = copiedHex === colour.hex;
             return (
               <div
                 key={colour.hex + idx}
-                className="rounded border border-[var(--border)] bg-[var(--surface)] p-3 flex flex-col justify-between hover:border-[var(--brown)] transition-all shadow-xs"
+                className="rounded border border-[var(--border)] bg-[var(--surface)] p-4 flex flex-col justify-between hover:border-[var(--brown)] transition-all shadow-xs h-full"
               >
                 <div>
-                  {/* Swatch Area with Copy action */}
+                  {/* Larger, clearly visible Swatch Area with Copy action */}
                   <button
                     type="button"
                     onClick={() => handleCopyHex(colour.hex)}
-                    className="w-full h-20 sm:h-24 rounded-sm border border-black/10 mb-2.5 relative group cursor-pointer overflow-hidden transition-transform active:scale-95"
+                    className="w-full h-32 sm:h-36 rounded border border-black/10 mb-3.5 relative group cursor-pointer overflow-hidden transition-transform active:scale-98 block"
                     style={{ backgroundColor: colour.hex }}
                     aria-label={`Copy hex code ${colour.hex}`}
                     title="Click to copy HEX code"
                   >
-                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-semibold">
-                      {isCopied ? 'Copied' : 'Click to copy HEX'}
+                    <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-semibold tracking-wide">
+                      {isCopied ? 'Copied to clipboard' : 'Click to copy HEX code'}
                     </div>
                   </button>
 
-                  <div className="flex items-center justify-between gap-1 mb-1">
-                    <span className="font-semibold text-sm text-[var(--text)] truncate" title={colour.name}>
+                  {/* Clearly visible HEX code and Colour Name */}
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="font-serif font-bold text-base text-[var(--brown)] truncate" title={colour.name}>
                       {colour.name}
                     </span>
                     <button
                       type="button"
                       onClick={() => handleCopyHex(colour.hex)}
-                      className="font-mono text-xs font-bold text-[var(--maroon)] hover:underline tabular-nums"
-                      title="Copy HEX"
+                      className="font-mono text-xs font-bold px-2.5 py-1 rounded bg-[var(--surface-alt)] border border-[var(--border)] text-[var(--maroon)] hover:bg-[var(--surface)] transition-colors tabular-nums min-h-[32px] flex items-center shrink-0 cursor-pointer"
+                      title="Click to copy HEX"
                     >
                       {isCopied ? 'Copied' : colour.hex}
                     </button>
                   </div>
 
-                  <p className="text-[11px] text-[var(--text-muted)] line-clamp-2 leading-relaxed mb-2">
+                  <p className="text-xs text-[var(--text-muted)] leading-relaxed mb-3">
                     {colour.description}
                   </p>
                 </div>
 
-                <div className="pt-2 border-t border-[var(--border)] text-[11px] text-[var(--brown)] font-medium">
-                  <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block">Application:</span>
-                  {colour.application}
+                {/* Practical application note */}
+                <div className="pt-2.5 border-t border-[var(--border)] text-xs text-[var(--text)]">
+                  <span className="font-bold text-[var(--text-muted)] uppercase text-[10px] tracking-wider block mb-0.5">
+                    Application:
+                  </span>
+                  <span className="font-medium text-[var(--brown)]">{colour.application}</span>
                 </div>
               </div>
             );

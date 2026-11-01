@@ -220,6 +220,10 @@ async function runSmokeTests() {
       formData: planPayload,
       plan: {
         ...planData.plan,
+        vendors: (planData.plan?.vendors || []).map((v: any, idx: number) => ({
+          ...v,
+          done: idx < 2, // First 2 vendors marked as completed (2 of 5 completed)
+        })),
         colourPalette: favouritePalette,
         savedPalettes: [favouritePalette],
       },
@@ -258,14 +262,19 @@ async function runSmokeTests() {
     const reloadedPalette = getData.event?.colourPalette || getData.event?.plan?.colourPalette;
     const palettePersisted = reloadedPalette && reloadedPalette.name === favouritePalette.name && reloadedPalette.colours.length === 5;
 
+    const reloadedVendors = getData.event?.plan?.vendors || [];
+    const completedVendorsCount = reloadedVendors.filter((v: any) => v.done).length;
+    const vendorPersistenceVerified = completedVendorsCount === 2 && reloadedVendors[0]?.done === true && reloadedVendors[2]?.done === false;
+
     reports.push({
       testNumber: 8,
-      name: 'Refresh and reopen event: verify saved palette persists',
-      passed: getRes.ok && Boolean(palettePersisted),
-      details: `Reopened event "${getData.event?.title}". Restored palette name: "${reloadedPalette?.name}". Colours: ${reloadedPalette?.colours.map((c: any) => `${c.name} (${c.hex})`).join(', ')}.`,
+      name: 'Refresh and reopen event: verify saved palette & vendor checklist persist',
+      passed: getRes.ok && Boolean(palettePersisted) && vendorPersistenceVerified,
+      details: `Reopened event "${getData.event?.title}". Restored palette name: "${reloadedPalette?.name}". Vendor progress: ${completedVendorsCount} of ${reloadedVendors.length} completed (persisted accurately).`,
       data: {
         persistedName: reloadedPalette?.name,
         coloursCount: reloadedPalette?.colours?.length,
+        completedVendorsCount,
       },
     });
 
