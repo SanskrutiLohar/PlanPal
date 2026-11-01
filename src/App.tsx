@@ -40,19 +40,19 @@ export default function App() {
       if (activePlan) {
         return [
           { name: 'Home', url: '/' },
-          { name: 'My events', url: '/my-events' },
+          { name: 'My Plans', url: '/my-events' },
           { name: activePlan.title, url: '/plan' },
         ];
       }
       return [
         { name: 'Home', url: '/' },
-        { name: 'Plan an event', url: '/plan' },
+        { name: 'AI Planner', url: '/plan' },
       ];
     }
     if (currentPath === '/my-events') {
       return [
         { name: 'Home', url: '/' },
-        { name: 'My events', url: '/my-events' },
+        { name: 'My Plans', url: '/my-events' },
       ];
     }
     if (currentPath === '/how-it-works') {
@@ -75,7 +75,7 @@ export default function App() {
     }
     return [
       { name: 'Home', url: '/' },
-      { name: 'Plan an event', url: '/plan' },
+      { name: 'AI Planner', url: '/plan' },
     ];
   };
 

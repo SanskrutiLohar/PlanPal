@@ -5,6 +5,7 @@ import {
   ExtractedEventSlots,
   DiscoveryMessage,
   AIProposedChange,
+  UploadedPhoto,
 } from '../types/plan.js';
 import { VisualInspirationCard } from './VisualInspirationCard.js';
 
@@ -14,16 +15,18 @@ interface ConversationalHeroProps {
   isGenerating: boolean;
   onGeneratePlan: (extracted: EventFormData) => Promise<void>;
   onApplyPlanUpdate: (updatedPlan: EventPlan, updatedFormData?: Partial<EventFormData>) => void;
-  onOpenWorkspace: () => void;
   onSavePlan?: () => void;
   isSaved?: boolean;
   onUndo?: () => void;
   canUndo?: boolean;
+  onPhotoUpload?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onRemovePhoto?: (id: string) => void;
+  photos?: UploadedPhoto[];
 }
 
 const STARTER_PROMPTS = [
   'Plan a 50-person birthday in Nashik in December, budget Rs 40,000, vegetarian, elegant but affordable',
-  'Wedding for 150 guests in Nashik with an ₹8,00,000 budget, traditional Maharashtrian vegetarian menu',
+  'Wedding for 150 guests in Nashik with an Rs 8,00,000 budget, traditional Maharashtrian vegetarian menu',
   'Birthday party for 30 guests in Pune with 50k budget and outdoor lawn decor',
   'Community cultural festival in Mumbai for 200 participants with 2 lakh budget',
 ];
@@ -34,11 +37,13 @@ export const ConversationalHero: React.FC<ConversationalHeroProps> = ({
   isGenerating,
   onGeneratePlan,
   onApplyPlanUpdate,
-  onOpenWorkspace,
   onSavePlan,
   isSaved = false,
   onUndo,
   canUndo = false,
+  onPhotoUpload,
+  onRemovePhoto,
+  photos = [],
 }) => {
   const [messages, setMessages] = useState<DiscoveryMessage[]>([
     {
@@ -74,6 +79,7 @@ export const ConversationalHero: React.FC<ConversationalHeroProps> = ({
   const chatEndRef = useRef<HTMLDivElement>(null);
   const generatingRef = useRef(false);
   const lastGeneratedSignatureRef = useRef<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -344,22 +350,11 @@ export const ConversationalHero: React.FC<ConversationalHeroProps> = ({
           <div className="flex flex-wrap items-center gap-2.5">
             {currentPlan && (
               <>
-                <button
-                  type="button"
-                  onClick={onOpenWorkspace}
-                  className="px-4 py-2.5 text-xs font-semibold rounded-sm bg-[#5A3E2B] text-white hover:bg-[#432D1F] transition-colors shadow-sm flex items-center gap-2"
-                >
-                  <span>Open Event Workspace</span>
-                  <span className="bg-white/20 text-white text-[10px] px-1.5 py-0.5 rounded-xs">
-                    Spreadsheet & Tasks
-                  </span>
-                </button>
-
                 {canUndo && onUndo && (
                   <button
                     type="button"
                     onClick={onUndo}
-                    className="px-3.5 py-2.5 text-xs font-semibold rounded-sm border border-[#DDD0BD] bg-white text-[#7A1F2B] hover:bg-[#FAF5ED] transition-colors"
+                    className="px-3.5 py-2.5 text-xs font-semibold rounded-sm border border-[#DDD0BD] bg-white text-[#7A1F2B] hover:bg-[#FAF5ED] transition-colors min-h-[44px]"
                   >
                     Undo
                   </button>
@@ -369,9 +364,9 @@ export const ConversationalHero: React.FC<ConversationalHeroProps> = ({
                   <button
                     type="button"
                     onClick={onSavePlan}
-                    className="px-3.5 py-2.5 text-xs font-medium rounded-sm border border-[#DDD0BD] bg-[#FAF5ED] text-[#5A3E2B] hover:bg-[#F2E8D7] transition-colors"
+                    className="px-3.5 py-2.5 text-xs font-medium rounded-sm border border-[#DDD0BD] bg-[#FAF5ED] text-[#5A3E2B] hover:bg-[#F2E8D7] transition-colors min-h-[44px]"
                   >
-                    {isSaved ? 'Saved in My Events' : 'Save Plan'}
+                    {isSaved ? 'Saved in My Plans' : 'Save Plan'}
                   </button>
                 )}
               </>
@@ -448,7 +443,7 @@ export const ConversationalHero: React.FC<ConversationalHeroProps> = ({
               type="button"
               disabled={isGenerating || !slots.eventType || !slots.city || !slots.guestCount || !slots.budgetINR}
               onClick={handleTriggerGenerate}
-              className={`ml-auto px-4 py-1.5 text-xs font-semibold rounded-sm transition-colors ${
+              className={`ml-auto px-4 py-1.5 text-xs font-semibold rounded-sm transition-colors min-h-[44px] ${
                 slots.eventType && slots.city && slots.guestCount && slots.budgetINR
                   ? 'bg-[#7A1F2B] text-white hover:bg-[#601822]'
                   : 'bg-[#DDD0BD] text-[#7A6B5D] cursor-not-allowed'
@@ -497,7 +492,7 @@ export const ConversationalHero: React.FC<ConversationalHeroProps> = ({
                   type="button"
                   key={idx}
                   onClick={() => handleSendDiscovery(prompt)}
-                  className="text-left text-xs p-2.5 rounded-sm bg-[#FAF5ED] border border-[#DDD0BD] text-[#4A3B2C] hover:border-[#7A1F2B] hover:bg-[#F2E8D7] transition-all"
+                  className="text-left text-xs p-2.5 rounded-sm bg-[#FAF5ED] border border-[#DDD0BD] text-[#4A3B2C] hover:border-[#7A1F2B] hover:bg-[#F2E8D7] transition-all min-h-[44px]"
                 >
                   "{prompt}"
                 </button>
@@ -563,7 +558,7 @@ export const ConversationalHero: React.FC<ConversationalHeroProps> = ({
                     handleSendDiscovery(lastFailedMessage);
                   }
                 }}
-                className="px-3 py-1 bg-[#FAF5ED] hover:bg-[#EFE6D8] border border-[#DDD0BD] rounded-sm text-xs font-semibold text-[#5A3E2B]"
+                className="px-3 py-1 bg-[#FAF5ED] hover:bg-[#EFE6D8] border border-[#DDD0BD] rounded-sm text-xs font-semibold text-[#5A3E2B] min-h-[44px]"
               >
                 Retry
               </button>
@@ -571,7 +566,7 @@ export const ConversationalHero: React.FC<ConversationalHeroProps> = ({
           </div>
         )}
 
-        {/* Inline Proposal Review Card with Before & After View (Requirement 4) */}
+        {/* Inline Proposal Review Card with Before & After View */}
         {activeProposal && (
           <div className="my-4 p-4 rounded-sm border-2 border-[#A8641A] bg-[#FFFBF5]">
             <div className="flex items-center justify-between mb-2">
@@ -626,14 +621,14 @@ export const ConversationalHero: React.FC<ConversationalHeroProps> = ({
               <button
                 type="button"
                 onClick={handleApproveProposal}
-                className="px-4 py-1.5 text-xs font-semibold rounded-sm bg-[#4F6B3A] text-white hover:bg-[#3D532C] transition-colors shadow-sm"
+                className="px-4 py-1.5 text-xs font-semibold rounded-sm bg-[#4F6B3A] text-white hover:bg-[#3D532C] transition-colors shadow-sm min-h-[44px]"
               >
                 Apply change
               </button>
               <button
                 type="button"
                 onClick={handleDiscardProposal}
-                className="px-3 py-1.5 text-xs font-medium rounded-sm border border-[#DDD0BD] bg-white text-[#5A3E2B] hover:bg-[#FAF5ED] transition-colors"
+                className="px-3 py-1.5 text-xs font-medium rounded-sm border border-[#DDD0BD] bg-white text-[#5A3E2B] hover:bg-[#FAF5ED] transition-colors min-h-[44px]"
               >
                 Discard
               </button>
@@ -641,38 +636,90 @@ export const ConversationalHero: React.FC<ConversationalHeroProps> = ({
           </div>
         )}
 
-        {/* Chat Input Bar */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (currentPlan) {
-              handleSendRefinement(e);
-            } else {
-              handleSendDiscovery();
-            }
-          }}
-          className="flex items-center gap-2 pt-2 border-t border-[#EFE6D8]"
-        >
-          <input
-            type="text"
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            disabled={isProcessingChat || isRefining || isGenerating}
-            placeholder={
-              currentPlan
-                ? "Ask to modify anything (e.g., 'Cut decor by 5% and add shehnai player', 'Move lunch to 1:30 PM')..."
-                : "Describe your event (e.g., 'Plan a 50-person birthday in Nashik in December, budget Rs 40,000, vegetarian')..."
-            }
-            className="flex-1 text-xs sm:text-sm px-3.5 py-2.5 rounded-sm border border-[#DDD0BD] bg-[#FAF5ED] text-[#2C2117] focus:outline-hidden focus:border-[#7A1F2B] focus:bg-white"
-          />
-          <button
-            type="submit"
-            disabled={!inputMessage.trim() || isProcessingChat || isRefining || isGenerating}
-            className="px-4 py-2.5 text-xs font-semibold rounded-sm bg-[#7A1F2B] text-white hover:bg-[#601822] disabled:bg-[#DDD0BD] disabled:text-[#8C7A68] transition-colors"
+        {/* Photo thumbnails (if any uploaded) */}
+        {photos.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {photos.map((photo, idx) => (
+              <div key={photo.id} className="relative rounded border border-[#DDD0BD] bg-[#FAF5ED] p-1 flex items-center gap-2">
+                <img
+                  src={photo.dataUrl}
+                  alt={`Reference photo ${idx + 1}`}
+                  className="w-10 h-10 object-cover rounded"
+                />
+                <span className="text-[10px] text-[#8C7A68] truncate max-w-[60px]" title={photo.name}>
+                  {photo.name}
+                </span>
+                {onRemovePhoto && (
+                  <button
+                    type="button"
+                    onClick={() => onRemovePhoto(photo.id)}
+                    className="text-[10px] font-semibold text-[#7A1F2B] hover:underline min-h-[44px] min-w-[44px] flex items-center justify-center"
+                    aria-label={`Remove photo ${idx + 1}`}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Chat Input Bar - fixed at bottom on mobile */}
+        <div className="sticky bottom-0 bg-[#FCF9F3] pt-2 z-10">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (currentPlan) {
+                handleSendRefinement(e);
+              } else {
+                handleSendDiscovery();
+              }
+            }}
+            className="flex items-center gap-2 pt-2 border-t border-[#EFE6D8]"
           >
-            {currentPlan ? 'Request change' : 'Send'}
-          </button>
-        </form>
+            {/* Add photos control */}
+            {onPhotoUpload && photos.length < 4 && (
+              <>
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  onChange={onPhotoUpload}
+                  className="hidden"
+                  aria-label="Upload venue or theme photos"
+                />
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  className="px-2.5 py-2.5 text-xs font-semibold rounded-sm border border-[#DDD0BD] bg-[#FAF5ED] text-[#5A3E2B] hover:bg-[#EFE6D8] transition-colors whitespace-nowrap min-h-[44px]"
+                  title="Add venue or theme photos (up to 4)"
+                >
+                  Add photos
+                </button>
+              </>
+            )}
+            <input
+              type="text"
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              disabled={isProcessingChat || isRefining || isGenerating}
+              placeholder={
+                currentPlan
+                  ? "Ask to modify anything (e.g., 'Cut decor by 5% and add shehnai player', 'Move lunch to 1:30 PM')..."
+                  : "Describe your event (e.g., 'Plan a 50-person birthday in Nashik in December, budget Rs 40,000, vegetarian')..."
+              }
+              className="flex-1 text-xs sm:text-sm px-3.5 py-2.5 rounded-sm border border-[#DDD0BD] bg-[#FAF5ED] text-[#2C2117] focus:outline-hidden focus:border-[#7A1F2B] focus:bg-white min-h-[44px]"
+            />
+            <button
+              type="submit"
+              disabled={!inputMessage.trim() || isProcessingChat || isRefining || isGenerating}
+              className="px-4 py-2.5 text-xs font-semibold rounded-sm bg-[#7A1F2B] text-white hover:bg-[#601822] disabled:bg-[#DDD0BD] disabled:text-[#8C7A68] transition-colors min-h-[44px]"
+            >
+              {currentPlan ? 'Request change' : 'Send'}
+            </button>
+          </form>
+        </div>
       </div>
 
       {/* Visual Inspiration Card (Rendered prominently right below dialogue once plan is generated) */}

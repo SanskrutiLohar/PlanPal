@@ -7,8 +7,9 @@ interface FooterProps {
 
 export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
   const links = [
-    { label: 'Plan an event', path: '/plan' },
-    { label: 'My events', path: '/my-events' },
+    { label: 'Home', path: '/' },
+    { label: 'AI Planner', path: '/plan' },
+    { label: 'My Plans', path: '/my-events' },
     { label: 'How it works', path: '/how-it-works' },
     { label: 'Vendor guide', path: '/vendor-guide' },
     { label: 'About', path: '/about' },
