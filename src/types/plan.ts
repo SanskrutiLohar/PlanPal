@@ -97,6 +97,29 @@ export interface VisualPaletteItem {
   hex: string;
 }
 
+export interface ColourItem {
+  name: string;
+  hex: string;
+  description: string;
+  application: string;
+}
+
+export interface SuggestedColourApplications {
+  decorations?: string;
+  flowers?: string;
+  invitations?: string;
+  tableSettings?: string;
+  otherElements?: string;
+}
+
+export interface ColourPalette {
+  id?: string;
+  name: string;
+  description: string;
+  colours: ColourItem[];
+  suggestedApplications?: SuggestedColourApplications;
+}
+
 export interface VisualInspiration {
   themeName: string;
   palette: VisualPaletteItem[];
@@ -115,6 +138,8 @@ export interface EventPlan {
   itinerary: ItineraryItem[];
   photosCount?: number;
   visualInspiration?: VisualInspiration;
+  colourPalette?: ColourPalette;
+  savedPalettes?: ColourPalette[];
   assumptions?: string[];
   realism?: {
     isUnrealistic: boolean;
@@ -196,6 +221,8 @@ export interface SavedPlan {
   expenses?: ExpenseItem[];
   tasks?: TimelineTask[];
   vendorComparisons?: VendorComparison[];
+  colourPalette?: ColourPalette;
+  savedPalettes?: ColourPalette[];
 }
 
 export interface EventDashboardStats {

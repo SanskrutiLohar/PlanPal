@@ -22,6 +22,8 @@ interface ConversationalHeroProps {
   onPhotoUpload?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onRemovePhoto?: (id: string) => void;
   photos?: UploadedPhoto[];
+  initialPrompt?: string | null;
+  onSlotsChange?: (slots: ExtractedEventSlots) => void;
 }
 
 const STARTER_PROMPTS = [
@@ -44,6 +46,8 @@ export const ConversationalHero: React.FC<ConversationalHeroProps> = ({
   onPhotoUpload,
   onRemovePhoto,
   photos = [],
+  initialPrompt,
+  onSlotsChange,
 }) => {
   const [messages, setMessages] = useState<DiscoveryMessage[]>([
     {
@@ -103,6 +107,16 @@ export const ConversationalHero: React.FC<ConversationalHeroProps> = ({
       ),
     }));
   }, [formData]);
+
+  useEffect(() => {
+    if (initialPrompt && initialPrompt.trim()) {
+      setInputMessage(initialPrompt);
+    }
+  }, [initialPrompt]);
+
+  useEffect(() => {
+    onSlotsChange?.(slots);
+  }, [slots, onSlotsChange]);
 
   // Handle conversational discovery submission
   const handleSendDiscovery = async (textToSend?: string) => {

@@ -38,9 +38,7 @@ function loadDb(): Record<string, SavedPlan[]> {
 
 function persistDb(): void {
   try {
-    const tmpFile = DB_FILE + '.tmp';
-    fs.writeFileSync(tmpFile, JSON.stringify(inMemoryStore, null, 2), 'utf-8');
-    fs.renameSync(tmpFile, DB_FILE);
+    fs.writeFileSync(DB_FILE, JSON.stringify(inMemoryStore, null, 2), 'utf-8');
   } catch (err) {
     console.warn('Failed to persist events DB to disk:', err);
   }

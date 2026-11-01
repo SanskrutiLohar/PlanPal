@@ -3,15 +3,16 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI, Type, ThinkingLevel } from '@google/genai';
-import { EventPlan, EventFormData, SavedPlan, PlanDiffItem } from './src/types/plan.js';
+import { EventPlan, EventFormData, SavedPlan, PlanDiffItem, ColourPalette } from './src/types/plan.js';
 import { getFallbackPlan } from './src/data/fallbackPlans.js';
 import { apiRateLimiter } from './src/server/rateLimiter.js';
-import { planRequestSchema, refineRequestSchema, aiAssistantRequestSchema, eventSaveSchema, chatDiscoveryRequestSchema } from './src/server/validation.js';
+import { planRequestSchema, refineRequestSchema, aiAssistantRequestSchema, eventSaveSchema, chatDiscoveryRequestSchema, paletteGenerateRequestSchema, paletteRefineRequestSchema } from './src/server/validation.js';
 import { getUserEvents, saveUserEvent, deleteUserEvent, getEventById } from './src/server/eventsDb.js';
 import { processAIAssistantMessage } from './src/server/aiAssistant.js';
 import { generateIntelligentTimeline } from './src/server/timelineGenerator.js';
 import { normalizeBudget, assessBudgetRealism } from './src/lib/budgetCalculator.js';
 import { processDiscoveryMessage } from './src/server/chatDiscovery.js';
+import { generatePaletteWithGemini, refinePaletteWithGemini, validateAndNormalizePalette, CURATED_PALETTES } from './src/server/colourStudio.js';
 
 dotenv.config();
 
@@ -46,7 +47,15 @@ Refinement rules:
 
 Culture and realism:
 - Use ceremony names only when you are confident they belong to that community and that day. If unsure, describe the step in plain words.
-- Keep event durations realistic for the event type.`;
+- Keep event durations realistic for the event type.
+
+Recommendation rules:
+- Generate 3 to 4 concise, practical and relevant recommendations based on the event type, location, budget, guest count, and user preferences.
+- Include cultural suggestions only when relevant to the local traditions of the specified city and community.
+- Provide practical logistical advice (e.g. generator power backup for audio, parking/valet coordination, catering queue flow, climate/weather comfort for guests).
+- Avoid generic, repetitive paragraphs.
+- Do not invent local facts or claim unverified information.
+- Prioritize recommendations that genuinely help execute the event on the day.`;
 
 const PLAN_RESPONSE_SCHEMA = {
   type: Type.OBJECT,
@@ -304,6 +313,40 @@ function sanitizePlan(raw: any, totalBudget: number, photosCount: number = 0): E
     };
   }
 
+  let colourPalette: ColourPalette;
+  if (raw.colourPalette && typeof raw.colourPalette === 'object') {
+    colourPalette = validateAndNormalizePalette(raw.colourPalette);
+  } else if (visualInspiration && Array.isArray(visualInspiration.palette) && visualInspiration.palette.length >= 4) {
+    const rawCols = visualInspiration.palette.map((p: any, idx: number) => ({
+      name: p.name || `Accent ${idx + 1}`,
+      hex: p.hex,
+      description: 'Harmonious event palette shade',
+      application: ['Stage backdrop drapery', 'Floral garlands and centerpieces', 'Stationery and invitation accents', 'Table runners and linen accents', 'Lighting and ambient highlights'][idx] || 'Decor styling',
+    }));
+    while (rawCols.length < 5) {
+      rawCols.push({
+        name: 'Sand Cream',
+        hex: '#F6F0E6',
+        description: 'Muted neutral background shade',
+        application: 'Canopy drapes and table cloths',
+      });
+    }
+    colourPalette = validateAndNormalizePalette({
+      name: visualInspiration.themeName || 'Regional Heritage Palette',
+      description: 'A curated five-colour scheme designed for harmonious Indian celebrations.',
+      colours: rawCols,
+      suggestedApplications: {
+        decorations: visualInspiration.stageConcept || 'Stage drapery and backdrop styling.',
+        flowers: visualInspiration.floralAndLighting || 'Floral arrangements and centerpieces.',
+        invitations: 'High-texture stationery with complementary ink accents.',
+        tableSettings: visualInspiration.tableSetting || 'Coordinated table runners and dinnerware.',
+        otherElements: 'Warm ambient lighting and gift packaging.',
+      },
+    });
+  } else {
+    colourPalette = CURATED_PALETTES[0];
+  }
+
   return {
     summary: sanitizeString(raw.summary),
     budget,
@@ -314,6 +357,8 @@ function sanitizePlan(raw: any, totalBudget: number, photosCount: number = 0): E
     itinerary,
     photosCount,
     visualInspiration,
+    colourPalette,
+    savedPalettes: Array.isArray(raw.savedPalettes) ? raw.savedPalettes : [],
   };
 }
 
@@ -1256,6 +1301,38 @@ app.post('/api/chat-discovery', async (req, res) => {
   } catch (err: any) {
     console.error('Chat discovery error:', err);
     res.status(500).json({ error: 'Failed to process discovery message' });
+  }
+});
+
+// POST /api/palette/generate - Gemini-powered Colour Studio palette generator & shuffle
+app.post('/api/palette/generate', async (req, res) => {
+  try {
+    const parseResult = paletteGenerateRequestSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: parseResult.error.issues[0]?.message || 'Invalid palette request' });
+    }
+    const ai = getGeminiClient();
+    const palette = await generatePaletteWithGemini(ai, parseResult.data);
+    res.json({ success: true, palette });
+  } catch (err: any) {
+    console.error('Palette generation failed:', err);
+    res.status(500).json({ error: 'Failed to generate palette' });
+  }
+});
+
+// POST /api/palette/refine - Gemini-powered palette refinement with conversational instructions
+app.post('/api/palette/refine', async (req, res) => {
+  try {
+    const parseResult = paletteRefineRequestSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: parseResult.error.issues[0]?.message || 'Invalid palette refinement request' });
+    }
+    const ai = getGeminiClient();
+    const palette = await refinePaletteWithGemini(ai, parseResult.data as any);
+    res.json({ success: true, palette });
+  } catch (err: any) {
+    console.error('Palette refinement failed:', err);
+    res.status(500).json({ error: 'Failed to refine palette' });
   }
 });
 

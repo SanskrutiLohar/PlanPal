@@ -132,8 +132,55 @@ export const eventSaveSchema = z.object({
     itinerary: z.array(z.any()),
     photoAnalysis: z.any().optional(),
     photosCount: z.number().optional(),
+    visualInspiration: z.any().optional(),
+    colourPalette: z.any().optional(),
+    savedPalettes: z.array(z.any()).optional(),
   }),
   expenses: z.array(z.any()).optional(),
   tasks: z.array(z.any()).optional(),
   vendorComparisons: z.array(z.any()).optional(),
+  colourPalette: z.any().optional(),
+  savedPalettes: z.array(z.any()).optional(),
+});
+
+export const paletteGenerateRequestSchema = z.object({
+  eventType: z.string().optional().default('Event'),
+  city: z.string().optional().default('India'),
+  theme: z.string().optional().nullable(),
+  preferences: z.string().optional().nullable(),
+  previousPalettes: z.array(z.string()).optional().default([]),
+});
+
+export const paletteRefineRequestSchema = z.object({
+  currentPalette: z.object({
+    name: z.string().optional(),
+    description: z.string().optional(),
+    colours: z
+      .array(
+        z.object({
+          name: z.string(),
+          hex: z.string(),
+          description: z.string().optional().default(''),
+          application: z.string().optional().default(''),
+        })
+      )
+      .min(1),
+    suggestedApplications: z
+      .object({
+        decorations: z.string().optional(),
+        flowers: z.string().optional(),
+        invitations: z.string().optional(),
+        tableSettings: z.string().optional(),
+        otherElements: z.string().optional(),
+      })
+      .optional(),
+  }),
+  instruction: z.string().min(1, 'Refinement instruction is required'),
+  eventDetails: z
+    .object({
+      eventType: z.string().optional().nullable(),
+      city: z.string().optional().nullable(),
+      theme: z.string().optional().nullable(),
+    })
+    .optional(),
 });

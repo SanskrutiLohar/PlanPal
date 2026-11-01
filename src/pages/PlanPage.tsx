@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { usePageMeta } from '../hooks/usePageMeta.js';
 import {
+  ColourPalette,
   EventFormData,
   EventPlan,
+  ExtractedEventSlots,
   SavedPlan,
   TimelineTask,
   UploadedPhoto,
@@ -12,6 +14,7 @@ import { persistEvent } from '../lib/storage.js';
 import { normalizeBudget } from '../lib/budgetCalculator.js';
 import { IntelligentTimeline } from '../components/IntelligentTimeline.js';
 import { ConversationalHero } from '../components/ConversationalHero.js';
+import { ColourStudio } from '../components/ColourStudio.js';
 
 const getLocalTodayString = () => {
   const now = new Date();
@@ -30,7 +33,7 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
   usePageMeta({
     title: 'AI Planner | PlanPal',
     description:
-      'Tell PlanPal your event type, guests, city and budget in rupees. Get a full plan you can edit by chat and save for later.',
+      'Tell PlanPal your event type, guests, city and budget in rupees. Get a full plan with AI Colour Studio that you can edit by chat.',
     canonicalPath: '/plan',
     breadcrumbs: [
       { name: 'Home', url: '/' },
@@ -38,29 +41,61 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
     ],
   });
 
-  const [formData, setFormData] = useState<EventFormData>({
-    eventType: null,
-    guestCount: null,
-    budgetINR: null,
-    date: null,
-    city: null,
-    notes: null,
-    photos: [],
+  const [formData, setFormData] = useState<EventFormData>(() => {
+    if (initialPlanData) {
+      return initialPlanData.formData;
+    }
+    return {
+      eventType: null,
+      guestCount: null,
+      budgetINR: null,
+      date: null,
+      city: null,
+      notes: null,
+      photos: [],
+    };
   });
 
-  const [savedEventId, setSavedEventId] = useState<string | null>(null);
-  const [plan, setPlan] = useState<EventPlan | null>(null);
+  const [savedEventId, setSavedEventId] = useState<string | null>(initialPlanData?.id || null);
+  const [plan, setPlan] = useState<EventPlan | null>(() => {
+    if (!initialPlanData?.plan) return null;
+    return {
+      ...initialPlanData.plan,
+      colourPalette: initialPlanData.colourPalette || initialPlanData.plan.colourPalette,
+      savedPalettes: initialPlanData.savedPalettes || initialPlanData.plan.savedPalettes,
+    };
+  });
   const [previousPlan, setPreviousPlan] = useState<EventPlan | null>(null);
-  const [tasks, setTasks] = useState<TimelineTask[]>([]);
+  const [tasks, setTasks] = useState<TimelineTask[]>(() => {
+    if (initialPlanData?.tasks && initialPlanData.tasks.length > 0) {
+      return initialPlanData.tasks;
+    }
+    if (initialPlanData?.plan?.timeline) {
+      return initialPlanData.plan.timeline.map((t, i) => ({
+        id: 'task_' + i,
+        when: t.when,
+        task: t.task,
+        category: 'General',
+        priority: 'Normal',
+        completed: Boolean((t as any).completed),
+      }));
+    }
+    return [];
+  });
 
   const [loading, setLoading] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [notification, setNotification] = useState<string>('');
+  const [initialPrompt, setInitialPrompt] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('prompt') || null;
+  });
 
   const sectionRefs = {
     summary: useRef<HTMLDivElement>(null),
     budget: useRef<HTMLDivElement>(null),
+    colourStudio: useRef<HTMLDivElement>(null),
     timeline: useRef<HTMLDivElement>(null),
     vendors: useRef<HTMLDivElement>(null),
     itinerary: useRef<HTMLDivElement>(null),
@@ -71,7 +106,14 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
     if (initialPlanData) {
       setSavedEventId(initialPlanData.id);
       setFormData(initialPlanData.formData);
-      setPlan(initialPlanData.plan);
+      const restoredPlan = initialPlanData.plan
+        ? {
+            ...initialPlanData.plan,
+            colourPalette: initialPlanData.colourPalette || initialPlanData.plan.colourPalette,
+            savedPalettes: initialPlanData.savedPalettes || initialPlanData.plan.savedPalettes,
+          }
+        : null;
+      setPlan(restoredPlan);
 
       if (initialPlanData.tasks && initialPlanData.tasks.length > 0) {
         setTasks(initialPlanData.tasks);
@@ -93,29 +135,8 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
     const params = new URLSearchParams(window.location.search);
     const promptParam = params.get('prompt');
     if (promptParam) {
-      fetch('/api/chat-discovery', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: promptParam }),
-      })
-        .then((r) => r.json())
-        .then((d) => {
-          if (d.slots) {
-            const nextForm: EventFormData = {
-              eventType: d.slots.eventType ?? null,
-              city: d.slots.city ?? null,
-              guestCount: d.slots.guestCount !== undefined ? d.slots.guestCount : null,
-              budgetINR: d.slots.budgetINR !== undefined ? d.slots.budgetINR : null,
-              date: d.slots.date ?? null,
-              notes: d.slots.notes ?? null,
-            };
-            setFormData(nextForm);
-            if (d.isReady && nextForm.eventType && nextForm.city && nextForm.guestCount && nextForm.budgetINR) {
-              executePlanGeneration(nextForm);
-            }
-          }
-        })
-        .catch(() => {});
+      setInitialPrompt(promptParam);
+      window.history.replaceState({}, '', '/plan');
     }
 
     const typeParam = params.get('type');
@@ -261,6 +282,18 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
     }));
   };
 
+  const handleSlotsChange = (slots: ExtractedEventSlots) => {
+    setFormData((prev) => ({
+      ...prev,
+      eventType: slots.eventType ?? prev.eventType,
+      city: slots.city ?? prev.city,
+      guestCount: slots.guestCount !== null && slots.guestCount !== undefined ? slots.guestCount : prev.guestCount,
+      budgetINR: slots.budgetINR !== null && slots.budgetINR !== undefined ? slots.budgetINR : prev.budgetINR,
+      date: slots.date ?? prev.date,
+      notes: slots.notes ?? prev.notes,
+    }));
+  };
+
   const executePlanGeneration = async (data: EventFormData) => {
     if (!data.eventType || !data.city || !data.guestCount || !data.budgetINR) {
       setErrorMessage('Please provide an event type, city, guest count, and budget in rupees.');
@@ -276,7 +309,7 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
       }
     }
     setLoading(true);
-    setStatusMessage('Generating comprehensive event plan with 100% budget math...');
+    setStatusMessage('Generating comprehensive event plan with 100% budget math and AI Colour Studio...');
     setErrorMessage('');
 
     try {
@@ -310,19 +343,22 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
           })
           .catch(() => {});
 
-        const eventId = savedEventId || 'plan_' + Date.now();
-        setSavedEventId(eventId);
-        persistEvent({
-          id: eventId,
-          title: `${data.eventType} in ${data.city} (${data.guestCount} guests)`,
-          formData: data,
-          plan: resData.plan,
-          expenses: [],
-          tasks: [],
-          vendorComparisons: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }).catch(() => {});
+        // If this plan was already saved, auto-update the existing record
+        if (savedEventId) {
+          persistEvent({
+            id: savedEventId,
+            title: `${data.eventType} in ${data.city} (${data.guestCount} guests)`,
+            formData: data,
+            plan: resData.plan,
+            colourPalette: resData.plan.colourPalette,
+            savedPalettes: resData.plan.savedPalettes,
+            expenses: [],
+            tasks: [],
+            vendorComparisons: [],
+            createdAt: initialPlanData?.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }).catch(() => {});
+        }
 
         const uploadedCount = (data.photos || []).length;
         if (resData.plan.photoAnalysis && !resData.plan.photoAnalysis.isRelevant && uploadedCount > 0) {
@@ -367,6 +403,8 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
         title: `${mergedFormData.eventType || 'Event'} in ${mergedFormData.city || 'India'} (${mergedFormData.guestCount || 0} guests)`,
         formData: mergedFormData,
         plan: updatedPlan,
+        colourPalette: updatedPlan.colourPalette,
+        savedPalettes: updatedPlan.savedPalettes,
         expenses: [],
         tasks,
         vendorComparisons: [],
@@ -388,7 +426,7 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
     if (!plan) return;
     try {
       const id = savedEventId || 'plan_' + Date.now();
-      const title = `${formData.eventType} in ${formData.city} (${formData.guestCount} guests)`;
+      const title = `${formData.eventType || 'Event'} in ${formData.city || 'India'} (${formData.guestCount || 0} guests)`;
       const newPlan: SavedPlan = {
         id,
         createdAt: initialPlanData?.createdAt || new Date().toISOString(),
@@ -396,6 +434,8 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
         title,
         formData,
         plan,
+        colourPalette: plan.colourPalette,
+        savedPalettes: plan.savedPalettes,
         expenses: [],
         tasks,
         vendorComparisons: [],
@@ -415,9 +455,11 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
     if (savedEventId && plan) {
       persistEvent({
         id: savedEventId,
-        title: `${formData.eventType} in ${formData.city} (${formData.guestCount} guests)`,
+        title: `${formData.eventType || 'Event'} in ${formData.city || 'India'} (${formData.guestCount || 0} guests)`,
         formData,
         plan,
+        colourPalette: plan.colourPalette,
+        savedPalettes: plan.savedPalettes,
         expenses: [],
         tasks: newTasks,
         vendorComparisons: [],
@@ -463,6 +505,13 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
       lines.push(`- ${item.item}: ${item.pct}% (${amountStr})`);
     });
 
+    if (plan.colourPalette) {
+      lines.push(``, `*Colour Palette: ${plan.colourPalette.name}*`);
+      plan.colourPalette.colours.forEach((c) => {
+        lines.push(`- ${c.name} (${c.hex}): ${c.application}`);
+      });
+    }
+
     lines.push(``, `*Key Vendors to Book:*`);
     plan.vendors.forEach((v) => {
       lines.push(`- [${v.done ? 'Booked' : 'Pending'}] ${v.name}`);
@@ -495,7 +544,6 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
     ? Math.round(formData.budgetINR / Math.max(1, formData.guestCount))
     : null;
 
-  // Chart colors strictly from section 5
   const chartColors = [
     'var(--maroon)',
     'var(--brown)',
@@ -509,6 +557,11 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
     sectionRefs[key].current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  // Filter distinct, non-repetitive ideas for presentation
+  const distinctIdeas = (plan?.ideas || []).filter((idea, idx, self) => {
+    return self.findIndex((i) => i.title.trim().toLowerCase() === idea.title.trim().toLowerCase()) === idx;
+  });
+
   return (
     <div className="w-full">
       {/* Page Title Area */}
@@ -518,13 +571,13 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
             AI Planner
           </h1>
           <p className="text-[var(--text-muted)] text-sm sm:text-base max-w-2xl">
-            Describe your event in chat to get a budget, timeline and vendor checklist in rupees.
+            Describe your event in chat to get a budget, timeline, AI Colour Studio palette and vendor checklist.
           </p>
         </div>
       </section>
 
       <div className="max-w-[1040px] mx-auto px-4 sm:px-6 pb-12">
-        {/* Conversational AI Hero (Primary Interface) */}
+        {/* Conversational AI Hero (The Primary Chat Interface) */}
         <div className="mb-8">
           <ConversationalHero
             currentPlan={plan}
@@ -539,6 +592,8 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
             onPhotoUpload={handlePhotoUpload}
             onRemovePhoto={handleRemovePhoto}
             photos={formData.photos || []}
+            initialPrompt={initialPrompt}
+            onSlotsChange={handleSlotsChange}
           />
         </div>
 
@@ -562,7 +617,7 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
               <button
                 type="button"
                 onClick={() => executePlanGeneration(formData)}
-                className="btn-secondary btn-small self-start sm:self-auto text-xs font-semibold whitespace-nowrap"
+                className="btn-secondary btn-small self-start sm:self-auto text-xs font-semibold whitespace-nowrap min-h-[44px]"
               >
                 Retry
               </button>
@@ -575,17 +630,7 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
           <div className="card p-8 mb-8 text-center bg-[var(--surface)] border border-[var(--border)]">
             <div className="inline-block w-8 h-8 rounded-full border-2 border-[var(--maroon)] border-t-transparent animate-spin mb-3"></div>
             <div className="font-serif text-lg font-semibold text-[var(--brown)]">Preparing your event plan...</div>
-            <div className="text-xs text-[var(--text-muted)] mt-1">{statusMessage || 'Balancing budget math and structuring schedule...'}</div>
-          </div>
-        )}
-
-        {/* Empty state when no plan has been generated yet */}
-        {!plan && !loading && (
-          <div className="card p-8 mb-8 text-center bg-[var(--surface)] border border-[var(--border)]">
-            <h3 className="text-xl font-serif text-[var(--brown)] font-semibold mb-2">No event plan created yet</h3>
-            <p className="text-sm text-[var(--text-muted)] max-w-lg mx-auto">
-              Use the chat above to describe your gathering in plain words (for example: "Plan a 50-person birthday in Nashik in December, budget Rs 40,000").
-            </p>
+            <div className="text-xs text-[var(--text-muted)] mt-1">{statusMessage || 'Balancing budget math, crafting Colour Studio palette and structuring schedule...'}</div>
           </div>
         )}
 
@@ -599,14 +644,15 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
             )}
 
             {/* Section Index */}
-            <nav className="flex flex-wrap items-center gap-1.5 p-1.5 rounded-[6px] bg-[var(--surface-alt)] border border-[var(--border)]" aria-label="Plan sections">
+            <nav className="flex flex-wrap items-center gap-1.5 p-1.5 rounded-[6px] bg-[var(--surface-alt)] border border-[var(--border)] sticky top-20 z-20 shadow-xs" aria-label="Plan sections">
               {[
                 { key: 'summary' as const, label: 'Summary' },
                 { key: 'budget' as const, label: 'Budget' },
+                { key: 'colourStudio' as const, label: 'Colour Studio' },
                 { key: 'timeline' as const, label: 'Timeline' },
                 { key: 'vendors' as const, label: 'Vendor checklist' },
                 { key: 'itinerary' as const, label: 'Itinerary' },
-                { key: 'ideas' as const, label: 'Ideas' },
+                { key: 'ideas' as const, label: 'Recommendations' },
               ].map((sec) => (
                 <button
                   key={sec.key}
@@ -629,15 +675,8 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
                       Plan summary
                     </h2>
                   </div>
-                  {/* Action row: Save plan and Copy summary only */}
+                  {/* Action row: Copy summary (Save plan is in the primary chat header) */}
                   <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={handleSavePlan}
-                      className="btn-secondary btn-small min-h-[44px]"
-                    >
-                      Save plan
-                    </button>
                     <button
                       type="button"
                       onClick={handleCopyWhatsAppSummary}
@@ -862,6 +901,41 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
               </section>
             </div>
 
+            {/* AI Colour Studio */}
+            <div ref={sectionRefs.colourStudio}>
+              <ColourStudio
+                initialPalette={plan.colourPalette}
+                formData={formData}
+                themeName={plan.visualInspiration?.themeName}
+                savedPalettes={plan.savedPalettes}
+                onPaletteChange={(newPalette) => {
+                  setPlan((prev) => (prev ? { ...prev, colourPalette: newPalette } : null));
+                }}
+                onSavePalette={(savedPalette) => {
+                  setPlan((prev) => {
+                    if (!prev) return null;
+                    const currentSaved = prev.savedPalettes || [];
+                    const exists = currentSaved.some((p) => p.name === savedPalette.name);
+                    const nextSaved = exists ? currentSaved : [...currentSaved, savedPalette];
+                    const nextPlan = { ...prev, colourPalette: savedPalette, savedPalettes: nextSaved };
+                    if (savedEventId) {
+                      persistEvent({
+                        id: savedEventId,
+                        title: `${formData.eventType || 'Event'} in ${formData.city || 'India'} (${formData.guestCount || 0} guests)`,
+                        formData,
+                        plan: nextPlan,
+                        colourPalette: savedPalette,
+                        savedPalettes: nextSaved,
+                        createdAt: initialPlanData?.createdAt || new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                      }).catch(() => {});
+                    }
+                    return nextPlan;
+                  });
+                }}
+              />
+            </div>
+
             {/* Timeline */}
             <div ref={sectionRefs.timeline}>
               <section className="card-result p-6">
@@ -982,7 +1056,7 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
               </section>
             </div>
 
-            {/* Ideas */}
+            {/* Cultural and Logistical Recommendations */}
             <div ref={sectionRefs.ideas}>
               <section className="card-result p-6">
                 <div className="mb-6">
@@ -990,26 +1064,46 @@ export const PlanPage: React.FC<PlanPageProps> = ({ onNavigate, initialPlanData 
                     Cultural and logistical recommendations
                   </h2>
                   <p className="text-sm text-[var(--text-muted)]">
-                    Practical suggestions for hospitality, guest comfort and cultural celebrations.
+                    Concise, practical recommendations for regional hospitality, guest comfort, and on-site logistics.
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
-                  {plan.ideas.map((idea, idx) => (
-                    <div key={idea.title + idx} className="card p-5 bg-[var(--surface)] flex flex-col justify-between">
-                      <div>
-                        <h3 className="text-base font-serif text-[var(--brown)] mb-2 font-semibold">
-                          {idea.title}
-                        </h3>
-                        <p className="text-sm text-[var(--text-muted)] leading-relaxed">
-                          {idea.detail}
-                        </p>
+                  {distinctIdeas.map((idea, idx) => {
+                    const titleLower = idea.title.toLowerCase();
+                    let badge = 'Logistics';
+                    if (titleLower.includes('cultural') || titleLower.includes('ritual') || titleLower.includes('tradition') || titleLower.includes('blessing')) {
+                      badge = 'Cultural Tradition';
+                    } else if (titleLower.includes('guest') || titleLower.includes('hospitality') || titleLower.includes('welcome') || titleLower.includes('food') || titleLower.includes('dining')) {
+                      badge = 'Guest Hospitality';
+                    } else if (titleLower.includes('vendor') || titleLower.includes('timeline') || titleLower.includes('power') || titleLower.includes('sound') || titleLower.includes('setup')) {
+                      badge = 'Execution & Timing';
+                    }
+
+                    return (
+                      <div key={idea.title + idx} className="card p-5 bg-[var(--surface)] flex flex-col justify-between border border-[var(--border)] hover:border-[var(--brown)] transition-colors">
+                        <div>
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-[var(--surface-alt)] text-[var(--brown)] border border-[var(--border)]">
+                              {badge}
+                            </span>
+                            <span className="text-[11px] text-[var(--text-muted)] font-mono">
+                              #{idx + 1}
+                            </span>
+                          </div>
+                          <h3 className="text-base font-serif text-[var(--brown)] mb-2 font-semibold leading-snug">
+                            {idea.title}
+                          </h3>
+                          <p className="text-sm text-[var(--text-muted)] leading-relaxed">
+                            {idea.detail}
+                          </p>
+                        </div>
+                        <div className="mt-4 pt-3 border-t border-[var(--border)] text-xs text-[var(--text-muted)]">
+                          Practical on-site guideline
+                        </div>
                       </div>
-                      <div className="mt-4 pt-3 border-t border-[var(--border)] text-xs text-[var(--text-muted)]">
-                        Recommendation {idx + 1}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
             </div>
