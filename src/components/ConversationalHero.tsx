@@ -7,7 +7,6 @@ import {
   AIProposedChange,
   UploadedPhoto,
 } from '../types/plan.js';
-import { VisualInspirationCard } from './VisualInspirationCard.js';
 
 interface ConversationalHeroProps {
   currentPlan: EventPlan | null;
@@ -735,11 +734,6 @@ export const ConversationalHero: React.FC<ConversationalHeroProps> = ({
           </form>
         </div>
       </div>
-
-      {/* Visual Inspiration Card (Rendered prominently right below dialogue once plan is generated) */}
-      {currentPlan?.visualInspiration && (
-        <VisualInspirationCard visualInspiration={currentPlan.visualInspiration} />
-      )}
     </div>
   );
 };

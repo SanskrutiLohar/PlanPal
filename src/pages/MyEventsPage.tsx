@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { usePageMeta } from '../hooks/usePageMeta.js';
 import { SavedPlan } from '../types/plan.js';
-import { fetchAllEvents, persistEvent, deleteEventPersisted, getPersistentUserId, setPersistentUserId } from '../lib/storage.js';
+import { fetchAllEvents, persistEvent, deleteEventPersisted } from '../lib/storage.js';
 
 interface MyEventsPageProps {
   onNavigate: (path: string) => void;
@@ -52,13 +52,7 @@ export const MyEventsPage: React.FC<MyEventsPageProps> = ({ onNavigate, onOpenPl
   const [showCleanupAssistant, setShowCleanupAssistant] = useState<boolean>(true);
   const [showBatchDeleteModal, setShowBatchDeleteModal] = useState<boolean>(false);
 
-  // Cross-device sync state
-  const [userId, setUserId] = useState<string>('');
-  const [showSyncModal, setShowSyncModal] = useState<boolean>(false);
-  const [inputSyncKey, setInputSyncKey] = useState<string>('');
-
   useEffect(() => {
-    setUserId(getPersistentUserId());
     loadAllPlans();
   }, []);
 
@@ -185,25 +179,6 @@ export const MyEventsPage: React.FC<MyEventsPageProps> = ({ onNavigate, onOpenPl
     setSelectedForCleanup(next);
   };
 
-  const handleCopySyncKey = () => {
-    navigator.clipboard.writeText(userId).then(() => {
-      setNotification('Device sync code copied to clipboard.');
-      setTimeout(() => setNotification(''), 3000);
-    });
-  };
-
-  const handleApplyNewSyncKey = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputSyncKey.trim()) return;
-    setPersistentUserId(inputSyncKey.trim());
-    setUserId(inputSyncKey.trim());
-    setShowSyncModal(false);
-    setInputSyncKey('');
-    await loadAllPlans();
-    setNotification('Synchronized with shared device ID.');
-    setTimeout(() => setNotification(''), 4000);
-  };
-
   return (
     <div className="w-full">
       {/* Page Title Area */}
@@ -214,17 +189,10 @@ export const MyEventsPage: React.FC<MyEventsPageProps> = ({ onNavigate, onOpenPl
               My Plans
             </h1>
             <p className="text-[var(--text-muted)] text-sm sm:text-base">
-              Manage saved event plans across your devices.
+              Manage saved event plans on this device.
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowSyncModal(true)}
-              className="btn-secondary text-xs h-10 px-3 min-h-[44px]"
-            >
-              Multi-device sync
-            </button>
             <button
               type="button"
               onClick={() => onNavigate('/plan')}
@@ -240,62 +208,6 @@ export const MyEventsPage: React.FC<MyEventsPageProps> = ({ onNavigate, onOpenPl
         {notification && (
           <div className="card p-4 mb-6 border-[var(--ok)] text-sm text-[var(--ok)] bg-[var(--surface)] font-semibold">
             {notification}
-          </div>
-        )}
-
-        {/* Multi-Device Sync Modal */}
-        {showSyncModal && (
-          <div className="card p-5 mb-6 border-2 border-[var(--maroon)] bg-[var(--surface)]">
-            <h3 className="text-lg font-serif font-semibold text-[var(--brown)] mb-2">
-              Cross-Device Access
-            </h3>
-            <p className="text-xs text-[var(--text-muted)] mb-4">
-              Your events are automatically persisted to storage. Use your unique Device Sync Key below to access your events from any phone, laptop, or browser.
-            </p>
-
-            <div className="p-3 rounded bg-[var(--surface-alt)] border border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
-              <div>
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] block">
-                  Your Device Sync Key
-                </span>
-                <code className="text-sm font-mono text-[var(--brown)] select-all font-semibold">
-                  {userId}
-                </code>
-              </div>
-              <button
-                type="button"
-                onClick={handleCopySyncKey}
-                className="btn-secondary text-xs py-1.5 px-3 self-start sm:self-auto min-h-[44px]"
-              >
-                Copy Sync Key
-              </button>
-            </div>
-
-            <form onSubmit={handleApplyNewSyncKey} className="space-y-3">
-              <label className="field-label">Access an existing account from another device:</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Paste Sync Key from another device (e.g. usr_...)"
-                  value={inputSyncKey}
-                  onChange={(e) => setInputSyncKey(e.target.value)}
-                  className="input-field flex-1 text-sm"
-                />
-                <button type="submit" className="btn-primary text-xs px-4 min-h-[44px]">
-                  Sync events
-                </button>
-              </div>
-            </form>
-
-            <div className="pt-3 text-right">
-              <button
-                type="button"
-                onClick={() => setShowSyncModal(false)}
-                className="text-xs text-[var(--text-muted)] hover:underline min-h-[44px]"
-              >
-                Close
-              </button>
-            </div>
           </div>
         )}
 
