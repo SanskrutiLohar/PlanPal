@@ -32,9 +32,22 @@ export function getFallbackPlan(formData: EventFormData): EventPlan {
         { name: 'Event Photographer', why: 'Captures family portraits and candids during cake cutting.', done: false },
       ],
       ideas: [
-        { title: 'DIY memory wall', detail: 'Display polaroid prints of the birthday person across their milestone years on a jute string.' },
-        { title: 'Local artisan return gifts', detail: 'Replace plastic knickknacks with handcrafted clay toys, seed pencils or jute pouches.' },
-        { title: 'Live food station', detail: 'Set up an interactive kulfi or jalebi counter that delights both children and grandparents.' },
+        {
+          title: 'Regional sweet & live counter',
+          detail: `Feature authentic local delicacies like fresh jalebi, kulfi or regional sweets tailored to your ${formData.city || 'Nashik'} celebration.`,
+        },
+        {
+          title: 'Power backup & music coordination',
+          detail: 'Confirm dedicated power generator backup with the venue to prevent audio cutoffs during evening cake cutting and family games.',
+        },
+        {
+          title: 'Buffet queue flow & hospitality',
+          detail: `For ${formData.guestCount || 50} guests, arrange two parallel dinner serving lines to eliminate waiting queues for elders and children.`,
+        },
+        {
+          title: 'Local artisan return gifts',
+          detail: 'Replace plastic knickknacks with handcrafted clay toys, seed pencils or local potted saplings.',
+        },
       ],
       photoAnalysis: null,
       visualInspiration: {

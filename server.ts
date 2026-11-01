@@ -1312,8 +1312,13 @@ app.post('/api/palette/generate', async (req, res) => {
       return res.status(400).json({ error: parseResult.error.issues[0]?.message || 'Invalid palette request' });
     }
     const ai = getGeminiClient();
-    const palette = await generatePaletteWithGemini(ai, parseResult.data);
-    res.json({ success: true, palette });
+    const result = await generatePaletteWithGemini(ai, parseResult.data);
+    res.json({
+      success: true,
+      palette: result.palette,
+      isFallback: result.isFallback,
+      modelUsed: result.modelUsed,
+    });
   } catch (err: any) {
     console.error('Palette generation failed:', err);
     res.status(500).json({ error: 'Failed to generate palette' });
@@ -1328,8 +1333,13 @@ app.post('/api/palette/refine', async (req, res) => {
       return res.status(400).json({ error: parseResult.error.issues[0]?.message || 'Invalid palette refinement request' });
     }
     const ai = getGeminiClient();
-    const palette = await refinePaletteWithGemini(ai, parseResult.data as any);
-    res.json({ success: true, palette });
+    const result = await refinePaletteWithGemini(ai, parseResult.data as any);
+    res.json({
+      success: true,
+      palette: result.palette,
+      isFallback: result.isFallback,
+      modelUsed: result.modelUsed,
+    });
   } catch (err: any) {
     console.error('Palette refinement failed:', err);
     res.status(500).json({ error: 'Failed to refine palette' });
@@ -1359,6 +1369,8 @@ async function startServer() {
     console.log(`PlanPal server running on port ${port} (mode: ${process.env.NODE_ENV || 'development'})`);
   });
 }
+
+export { app, startServer };
 
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 if (isMain && process.env.NODE_ENV !== 'test') {

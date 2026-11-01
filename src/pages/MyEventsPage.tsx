@@ -102,9 +102,10 @@ export const MyEventsPage: React.FC<MyEventsPageProps> = ({ onNavigate, onOpenPl
       }
 
       // 3. Duplicate detection based on event parameters and base title
+      const isCopy = titleLower.includes('(copy)');
       const cleanTitle = titleLower.replace(/\s*\(copy\)\s*$/i, '');
       const sig = `${(p.formData?.eventType || '').trim().toLowerCase()}|${(p.formData?.city || '').trim().toLowerCase()}|${p.formData?.guestCount || 0}|${p.formData?.budgetINR || 0}|${cleanTitle}`;
-      if (seenSignatures.has(sig)) {
+      if (seenSignatures.has(sig) || isCopy) {
         reasons.push('Duplicate entry of another saved event');
       } else {
         seenSignatures.set(sig, p.id);

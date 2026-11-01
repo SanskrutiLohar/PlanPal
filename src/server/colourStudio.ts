@@ -193,6 +193,12 @@ export function validateAndNormalizePalette(raw: any, eventType: string = 'Event
   };
 }
 
+export interface PaletteResult {
+  palette: ColourPalette;
+  isFallback: boolean;
+  modelUsed?: string;
+}
+
 export async function generatePaletteWithGemini(
   ai: GoogleGenAI | null,
   params: {
@@ -202,7 +208,7 @@ export async function generatePaletteWithGemini(
     preferences?: string | null;
     previousPalettes?: string[];
   }
-): Promise<ColourPalette> {
+): Promise<PaletteResult> {
   const { eventType, city, theme, preferences, previousPalettes = [] } = params;
 
   if (ai) {
@@ -239,7 +245,11 @@ Rules:
         const text = response.text?.trim() || '';
         if (text) {
           const parsed = JSON.parse(text);
-          return validateAndNormalizePalette(parsed, eventType);
+          return {
+            palette: validateAndNormalizePalette(parsed, eventType),
+            isFallback: false,
+            modelUsed: modelName,
+          };
         }
       } catch (err: any) {
         console.warn(`Gemini palette generation attempt with ${modelName} failed:`, err?.message || err);
@@ -251,7 +261,10 @@ Rules:
   const prevSet = new Set((previousPalettes || []).map((p) => p.toLowerCase()));
   const available = CURATED_PALETTES.filter((p) => !prevSet.has(p.name.toLowerCase()));
   const chosen = available.length > 0 ? available[Math.floor(Math.random() * available.length)] : CURATED_PALETTES[0];
-  return validateAndNormalizePalette(chosen, eventType);
+  return {
+    palette: validateAndNormalizePalette(chosen, eventType),
+    isFallback: true,
+  };
 }
 
 export async function refinePaletteWithGemini(
@@ -265,7 +278,7 @@ export async function refinePaletteWithGemini(
       theme?: string | null;
     };
   }
-): Promise<ColourPalette> {
+): Promise<PaletteResult> {
   const { currentPalette, instruction, eventDetails } = params;
 
   if (ai) {
@@ -304,7 +317,11 @@ Instructions:
         const text = response.text?.trim() || '';
         if (text) {
           const parsed = JSON.parse(text);
-          return validateAndNormalizePalette(parsed, eventDetails?.eventType || 'Event');
+          return {
+            palette: validateAndNormalizePalette(parsed, eventDetails?.eventType || 'Event'),
+            isFallback: false,
+            modelUsed: modelName,
+          };
         }
       } catch (err: any) {
         console.warn(`Gemini palette refinement attempt with ${modelName} failed:`, err?.message || err);
@@ -340,5 +357,9 @@ Instructions:
     modified.name = `${currentPalette.name} (Refined)`;
   }
 
-  return validateAndNormalizePalette(modified, eventDetails?.eventType || 'Event');
+  return {
+    palette: validateAndNormalizePalette(modified, eventDetails?.eventType || 'Event'),
+    isFallback: true,
+  };
 }
+

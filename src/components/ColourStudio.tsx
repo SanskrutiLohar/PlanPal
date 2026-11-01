@@ -28,6 +28,7 @@ export const ColourStudio: React.FC<ColourStudioProps> = ({
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [notification, setNotification] = useState<string>('');
   const [isSaved, setIsSaved] = useState<boolean>(false);
+  const [isFallbackMode, setIsFallbackMode] = useState<boolean>(false);
 
   // Initialize with initialPalette or fetch once if not present
   useEffect(() => {
@@ -93,11 +94,19 @@ export const ColourStudio: React.FC<ColourStudioProps> = ({
       if (data.palette) {
         const newPalette = data.palette;
         setCurrentPalette(newPalette);
+        setIsFallbackMode(Boolean(data.isFallback));
 
         // Append to history
         const updatedHistory = [...paletteHistory.slice(0, historyIndex + 1), newPalette];
         setPaletteHistory(updatedHistory);
         setHistoryIndex(updatedHistory.length - 1);
+
+        if (data.isFallback) {
+          setNotification('Loaded regional benchmark palette.');
+        } else {
+          setNotification('New palette generated with Gemini AI.');
+        }
+        setTimeout(() => setNotification(''), 4000);
 
         if (onPaletteChange) {
           onPaletteChange(newPalette);
@@ -154,13 +163,15 @@ export const ColourStudio: React.FC<ColourStudioProps> = ({
       if (data.palette) {
         const refinedPalette = data.palette;
         setCurrentPalette(refinedPalette);
+        setIsFallbackMode(Boolean(data.isFallback));
         setRefineText('');
 
         const updatedHistory = [...paletteHistory.slice(0, historyIndex + 1), refinedPalette];
         setPaletteHistory(updatedHistory);
         setHistoryIndex(updatedHistory.length - 1);
 
-        setNotification(`Palette refined: "${instruction}".`);
+        const sourceNote = data.isFallback ? ' (benchmark rule)' : ' with Gemini AI';
+        setNotification(`Palette refined: "${instruction}"${sourceNote}.`);
         setTimeout(() => setNotification(''), 4000);
 
         if (onPaletteChange) {
@@ -213,9 +224,14 @@ export const ColourStudio: React.FC<ColourStudioProps> = ({
       {/* Header and Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-4 border-b border-[var(--border)]">
         <div>
-          <span className="text-xs font-semibold tracking-wider text-[var(--warn)] uppercase block mb-1">
-            AI Colour Studio
-          </span>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-semibold tracking-wider text-[var(--warn)] uppercase">
+              AI Colour Studio
+            </span>
+            <span className="text-[10px] px-2 py-0.5 rounded font-medium border border-[var(--border)] bg-[var(--surface-alt)] text-[var(--text-muted)]">
+              {isFallbackMode ? 'Curated benchmark' : 'Gemini AI generated'}
+            </span>
+          </div>
           <h2 className="text-2xl font-serif text-[var(--brown)] font-bold">
             {currentPalette.name}
           </h2>
@@ -449,3 +465,4 @@ export const ColourStudio: React.FC<ColourStudioProps> = ({
     </section>
   );
 };
+
